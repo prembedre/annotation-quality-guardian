@@ -1,0 +1,4 @@
+item_id,project_id,gold_label,text
+rev-001,1,positive,"Absolutely love this product!"
+rev-002,1,negative,"Terrible experience, would not recommend."
+rev-003,1,neutral,"It was okay, nothing special."
