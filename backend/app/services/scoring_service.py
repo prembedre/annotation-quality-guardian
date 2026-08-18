@@ -1,29 +1,30 @@
 """
 Business logic for scoring operations.
-
-Orchestrates calls to the scoring engine (gold-standard checks,
-inter-annotator agreement, anomaly detection) and persists results.
 """
 
-from typing import Any, Dict
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.services.gold_standard_service import compute_gold_accuracy
 
 
-async def compute_project_scores(project_id: int) -> Dict[str, Any]:
+async def compute_project_scores(
+    db: Session,
+    project_id: int,
+) -> dict[str, Any]:
     """
-    Compute all quality scores for a project.
-
-    Steps:
-        1. Fetch annotations from the database
-        2. Run gold-standard validation
-        3. Compute inter-annotator agreement (Cohen/Fleiss Kappa)
-        4. (Future) Run behavioral anomaly detection
-        5. (Future) Run embedding outlier detection
-        6. Persist and return aggregated results
+    Compute quality scores for a project.
     """
-    # TODO: implement scoring pipeline
+
+    gold_result = compute_gold_accuracy(
+        db=db,
+        project_id=project_id,
+    )
+
     return {
         "project_id": project_id,
-        "gold_accuracy": None,
+        "gold_accuracy": gold_result,
         "kappa": None,
         "anomalies": [],
     }
