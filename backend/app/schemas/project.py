@@ -2,9 +2,9 @@
 Pydantic schemas for projects.
 """
 
-from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ProjectCreate(BaseModel):
@@ -16,12 +16,11 @@ class ProjectCreate(BaseModel):
 
 class ProjectResponse(BaseModel):
     """Single project response."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str] = None
     label_set: List[str]
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True

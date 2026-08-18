@@ -2,9 +2,9 @@
 Pydantic schemas for annotations.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class AnnotationCreate(BaseModel):
@@ -14,23 +14,22 @@ class AnnotationCreate(BaseModel):
     item_id: str = Field(..., description="Identifier of the item being annotated")
     label: str = Field(..., description="The assigned label/class")
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annotator confidence")
-    metadata: Optional[dict] = Field(default_factory=dict, description="Additional metadata")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 
 class AnnotationResponse(BaseModel):
     """Single annotation response."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     annotator_id: int
     item_id: str
     label: str
     confidence: Optional[float] = None
-    metadata: dict = {}
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 class AnnotationListResponse(BaseModel):

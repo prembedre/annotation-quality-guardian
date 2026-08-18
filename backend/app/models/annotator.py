@@ -22,5 +22,13 @@ class Annotator(Base):
     # Relationships
     annotations = relationship("Annotation", back_populates="annotator", cascade="all, delete-orphan")
 
+    @property
+    def username(self) -> str:
+        return self.name
+
+    @username.setter
+    def username(self, val: str) -> None:
+        self.name = val
+
     def __repr__(self) -> str:
         return f"<Annotator(id={self.id}, name='{self.name}')>"
