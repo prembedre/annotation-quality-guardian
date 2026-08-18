@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # ── Database ──
     DATABASE_URL: str = Field(
-        default="sqlite:///./aqg_dev.db",
+        default="postgresql:///./aqg_dev.db",
         description="SQLAlchemy Database connection URI (PostgreSQL or SQLite)",
     )
 
