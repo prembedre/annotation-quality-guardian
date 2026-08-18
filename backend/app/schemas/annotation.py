@@ -11,7 +11,7 @@ class AnnotationCreate(BaseModel):
     """Payload for creating a new annotation."""
     project_id: int = Field(..., description="ID of the parent project")
     annotator_id: int = Field(..., description="ID of the annotator")
-    item_id: str = Field(..., description="Identifier of the item being annotated")
+    item_id: int = Field(..., description="Identifier of the item being annotated")
     label: str = Field(..., description="The assigned label/class")
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annotator confidence")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
