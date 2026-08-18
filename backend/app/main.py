@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.db import engine, Base
-from app.api import health, annotations, projects, scores
+import app.models  # Ensure all SQLAlchemy models are registered
+from app.api import health, annotations, projects, scores, review, export, ingestion
 
 
 @asynccontextmanager
@@ -45,6 +46,9 @@ app.include_router(health.router)
 app.include_router(annotations.router, prefix="/api/annotations", tags=["Annotations"])
 app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
 app.include_router(scores.router, prefix="/api/scores", tags=["Scores"])
+app.include_router(review.router, prefix="/api/review", tags=["Review Queue"])
+app.include_router(ingestion.router, prefix="/api", tags=["Ingestion"])
+app.include_router(export.router, prefix="/api/export", tags=["Export"])
 
 
 @app.get("/", tags=["Root"])
