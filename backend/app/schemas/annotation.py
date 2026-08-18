@@ -14,6 +14,7 @@ class AnnotationCreate(BaseModel):
     item_id: int = Field(..., description="Identifier of the item being annotated")
     label: str = Field(..., description="The assigned label/class")
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annotator confidence")
+    duration_ms: Optional[int] = Field(None, description="Time taken to annotate the item in milliseconds")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 
