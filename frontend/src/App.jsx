@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-do
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import Scores from './pages/Scores';
+import ReviewQueue from './pages/ReviewQueue';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
             <li><NavLink to="/" end>Dashboard</NavLink></li>
             <li><NavLink to="/projects">Projects</NavLink></li>
             <li><NavLink to="/scores">Scores</NavLink></li>
+            <li><NavLink to="/review-queue">Review Queue</NavLink></li>
           </ul>
         </nav>
         <main className="content">
@@ -21,6 +23,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/scores" element={<Scores />} />
+            <Route path="/review-queue" element={<ReviewQueue />} />
           </Routes>
         </main>
       </div>
