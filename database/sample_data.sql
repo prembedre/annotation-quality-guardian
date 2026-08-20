@@ -50,3 +50,109 @@ INSERT INTO annotations (project_id, item_id, annotator_id, label, confidence, d
     (1, 4, 3, 'positive', 0.91, 3300),
     (1, 5, 3, 'negative', 0.82, 3400),
     (1, 6, 3, 'positive', 0.65, 5100);   -- disagreement with Alice & Bob
+
+-- ============================================================
+-- Phase 2 Sample Data
+-- ============================================================
+
+-- Behavioral scores
+INSERT INTO behavioral_scores (
+    project_id,
+    annotator_id,
+    item_id,
+    time_score,
+    streak_score,
+    anomaly_score,
+    details
+) VALUES
+    (
+        1, 1, 4,
+        0.90,
+        0.85,
+        0.10,
+        '{"reason": "Normal annotation behavior"}'
+    ),
+    (
+        1, 2, 5,
+        0.45,
+        0.35,
+        0.72,
+        '{"reason": "Unusual timing and disagreement streak"}'
+    );
+
+-- Embedding results
+INSERT INTO embedding_results (
+    project_id,
+    item_id,
+    model_name,
+    embedding,
+    outlier_score,
+    is_outlier,
+    nearest_item_id,
+    details
+) VALUES
+    (
+        1,
+        4,
+        'sentence-transformers',
+        '[0.12, 0.45, 0.78]',
+        0.18,
+        FALSE,
+        1,
+        '{"method": "cosine_similarity"}'
+    ),
+    (
+        1,
+        5,
+        'sentence-transformers',
+        '[0.91, 0.05, 0.12]',
+        0.87,
+        TRUE,
+        2,
+        '{"method": "cosine_similarity"}'
+    );
+
+-- Final trust scores
+INSERT INTO trust_scores (
+    project_id,
+    item_id,
+    gold_score,
+    agreement_score,
+    behavioral_score,
+    embedding_score,
+    final_score,
+    flagged,
+    breakdown
+) VALUES
+    (
+        1,
+        4,
+        0.95,
+        0.90,
+        0.90,
+        0.82,
+        0.89,
+        FALSE,
+        '{
+            "gold": 0.95,
+            "agreement": 0.90,
+            "behavioral": 0.90,
+            "embedding": 0.82
+        }'
+    ),
+    (
+        1,
+        5,
+        0.60,
+        0.45,
+        0.45,
+        0.13,
+        0.41,
+        TRUE,
+        '{
+            "gold": 0.60,
+            "agreement": 0.45,
+            "behavioral": 0.45,
+            "embedding": 0.13
+        }'
+    );
