@@ -2,137 +2,260 @@
 Unit tests verifying SQLAlchemy models and relationships.
 """
 
-from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core.db import Base
+from app.models import Project, Item, Annotator, Annotation, TrustScore
 
 
-def test_create_project(client: TestClient):
-    """
-    Verify that a project can be created successfully.
-    """
+@pytest.fixture
+def db_session():
+    """Create an isolated SQLite database for model tests."""
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+    )
 
-    response = client.post(
-        "/projects/",
-        json={
-            "name": "Sentiment Analysis",
-            "description": "Test sentiment project",
-            "label_set": [
-                "positive",
-                "negative",
-                "neutral",
-            ],
+    Base.metadata.create_all(bind=engine)
+
+    SessionLocal = sessionmaker(
+        bind=engine,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    session = SessionLocal()
+
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+
+
+def test_create_project_and_item(db_session):
+    """Test creating a project and an item belonging to it."""
+
+    project = Project(
+        name="Sentiment Analysis",
+        description="Test sentiment project",
+        label_set=["positive", "negative", "neutral"],
+    )
+
+    db_session.add(project)
+    db_session.commit()
+    db_session.refresh(project)
+
+    item = Item(
+        project_id=project.id,
+        external_id="item-001",
+        content={"text": "Excellent product!"},
+        is_gold=True,
+        gold_label="positive",
+    )
+
+    db_session.add(item)
+    db_session.commit()
+    db_session.refresh(item)
+
+    assert project.id is not None
+    assert item.id is not None
+    assert item.project_id == project.id
+    assert item.external_id == "item-001"
+    assert item.is_gold is True
+    assert item.gold_label == "positive"
+
+
+def test_create_annotator(db_session):
+    """Test creating an annotator."""
+
+    annotator = Annotator(
+        username="alex",
+        email="alex@example.com",
+    )
+
+    db_session.add(annotator)
+    db_session.commit()
+    db_session.refresh(annotator)
+
+    assert annotator.id is not None
+    assert annotator.username == "alex"
+    assert annotator.email == "alex@example.com"
+
+
+def test_create_annotation_and_trust_score(db_session):
+    """Test annotation and trust score relationships."""
+
+    project = Project(
+        name="Quality Test",
+        label_set=["positive", "negative", "neutral"],
+    )
+
+    annotator = Annotator(
+        username="sam",
+        email="sam@example.com",
+    )
+
+    db_session.add_all([project, annotator])
+    db_session.commit()
+
+    item = Item(
+        project_id=project.id,
+        external_id="item-001",
+        content={"text": "What is AQG?"},
+    )
+
+    db_session.add(item)
+    db_session.commit()
+
+    annotation = Annotation(
+        project_id=project.id,
+        item_id=item.id,
+        annotator_id=annotator.id,
+        label="positive",
+        confidence=0.98,
+        duration_ms=1500,
+        metadata={"source": "test"},
+    )
+
+    trust_score = TrustScore(
+        item_id=item.id,
+        score=0.92,
+        breakdown={
+            "gold_accuracy": 1.0,
+            "agreement": 0.88,
+            "anomaly": 0.0,
         },
+        flagged=False,
     )
 
-    assert response.status_code == 201
+    db_session.add_all([annotation, trust_score])
+    db_session.commit()
 
-    data = response.json()
+    db_session.refresh(annotation)
+    db_session.refresh(trust_score)
 
-    assert data["id"] is not None
-    assert data["name"] == "Sentiment Analysis"
-    assert data["description"] == "Test sentiment project"
-    assert data["label_set"] == [
-        "positive",
-        "negative",
-        "neutral",
-    ]
+    assert annotation.id is not None
+    assert trust_score.id is not None
+
+    assert annotation.project_id == project.id
+    assert annotation.item_id == item.id
+    assert annotation.annotator_id == annotator.id
+    assert annotation.label == "positive"
+    assert annotation.confidence == 0.98
+
+    assert trust_score.item_id == item.id
+    assert trust_score.score == 0.92
+    assert trust_score.flagged is False
+
+    # Relationship checks
+    assert len(item.annotations) == 1
+    assert len(item.trust_scores) == 1
+    assert item.annotations[0].label == "positive"
+    assert item.annotations[0].annotator.username == "sam"
+    assert item.annotations[0].project.name == "Quality Test"
+
+    assert item.project.name == "Quality Test"
+    assert len(project.items) == 1
+    assert len(project.annotations) == 1
+    assert len(annotator.annotations) == 1
 
 
-def test_get_project(client: TestClient):
-    """
-    Verify that a created project can be retrieved.
-    """
+def test_annotation_unique_per_item_and_annotator(db_session):
+    """Test that one annotator cannot annotate the same item twice."""
 
-    create_response = client.post(
-        "/projects/",
-        json={
-            "name": "Named Entity Recognition",
-            "description": "Test NER project",
-            "label_set": [
-                "PER",
-                "ORG",
-                "LOC",
-                "MISC",
-            ],
-        },
+    project = Project(
+        name="Unique Test",
+        label_set=["yes", "no"],
     )
 
-    assert create_response.status_code == 201
-
-    project = create_response.json()
-    project_id = project["id"]
-
-    response = client.get(f"/projects/{project_id}")
-
-    assert response.status_code == 200
-
-    data = response.json()
-
-    assert data["id"] == project_id
-    assert data["name"] == "Named Entity Recognition"
-
-
-def test_list_projects(client: TestClient):
-    """
-    Verify that projects can be listed.
-    """
-
-    response = client.post(
-        "/projects/",
-        json={
-            "name": "Test Project",
-            "description": "Project for testing",
-            "label_set": ["positive", "negative"],
-        },
+    annotator = Annotator(
+        username="unique_user",
+        email="unique@example.com",
     )
 
-    assert response.status_code == 201
+    db_session.add_all([project, annotator])
+    db_session.commit()
 
-    response = client.get("/projects/")
-
-    assert response.status_code == 200
-
-    data = response.json()
-
-    assert isinstance(data, list)
-    assert len(data) >= 1
-
-
-def test_duplicate_project_name(client: TestClient):
-    """
-    Verify that duplicate project names are rejected.
-    """
-
-    payload = {
-        "name": "Duplicate Project",
-        "description": "Duplicate test",
-        "label_set": ["yes", "no"],
-    }
-
-    first_response = client.post(
-        "/projects/",
-        json=payload,
+    item = Item(
+        project_id=project.id,
+        external_id="unique-item",
+        content={"text": "Test"},
     )
 
-    assert first_response.status_code == 201
+    db_session.add(item)
+    db_session.commit()
 
-    second_response = client.post(
-        "/projects/",
-        json=payload,
+    annotation = Annotation(
+        project_id=project.id,
+        item_id=item.id,
+        annotator_id=annotator.id,
+        label="yes",
+        confidence=0.9,
     )
 
-    assert second_response.status_code == 409
+    db_session.add(annotation)
+    db_session.commit()
+
+    duplicate = Annotation(
+        project_id=project.id,
+        item_id=item.id,
+        annotator_id=annotator.id,
+        label="no",
+        confidence=0.5,
+    )
+
+    db_session.add(duplicate)
+
+    with pytest.raises(Exception):
+        db_session.commit()
+
+    db_session.rollback()
 
 
-def test_health_after_database_operations(client: TestClient):
-    """
-    Verify that the PostgreSQL test database remains connected.
-    """
+def test_project_relationships(db_session):
+    """Test project-to-item and project-to-annotation relationships."""
 
-    response = client.get("/health")
+    project = Project(
+        name="Relationship Test",
+        label_set=["a", "b"],
+    )
 
-    assert response.status_code == 200
+    annotator = Annotator(
+        username="relationship_user",
+        email="relationship@example.com",
+    )
 
-    data = response.json()
+    db_session.add_all([project, annotator])
+    db_session.commit()
 
-    assert data["status"] == "ok"
-    assert data["database"] == "connected"
+    item = Item(
+        project_id=project.id,
+        external_id="relationship-item",
+        content={"text": "Relationship test"},
+    )
+
+    db_session.add(item)
+    db_session.commit()
+
+    annotation = Annotation(
+        project_id=project.id,
+        item_id=item.id,
+        annotator_id=annotator.id,
+        label="a",
+        confidence=0.95,
+    )
+
+    db_session.add(annotation)
+    db_session.commit()
+
+    assert item.project == project
+    assert annotation.project == project
+    assert annotation.item == item
+    assert annotation.annotator == annotator
+    assert annotation in project.annotations
+    assert annotation in annotator.annotations
+    assert item in project.items
