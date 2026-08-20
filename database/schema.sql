@@ -66,3 +66,88 @@ CREATE INDEX idx_annotations_item      ON annotations (item_id);
 CREATE INDEX idx_items_project         ON items (project_id);
 CREATE INDEX idx_items_gold            ON items (project_id, is_gold) WHERE is_gold = TRUE;
 CREATE INDEX idx_quality_scores_project ON quality_scores (project_id);
+
+-- ============================================================
+-- Phase 2 Tables
+-- ============================================================
+
+-- Behavioral scoring results
+CREATE TABLE IF NOT EXISTS behavioral_scores (
+    id              SERIAL PRIMARY KEY,
+    project_id      INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    annotator_id    INT NOT NULL REFERENCES annotators(id) ON DELETE CASCADE,
+    item_id         INT REFERENCES items(id) ON DELETE CASCADE,
+
+    time_score      NUMERIC(10,6),
+    streak_score    NUMERIC(10,6),
+    anomaly_score   NUMERIC(10,6),
+
+    details         JSONB NOT NULL DEFAULT '{}',
+    computed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Embedding results
+CREATE TABLE IF NOT EXISTS embedding_results (
+    id                SERIAL PRIMARY KEY,
+    project_id        INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    item_id           INT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+
+    model_name        VARCHAR(255) NOT NULL,
+    embedding         JSONB,
+    outlier_score     NUMERIC(10,6),
+    is_outlier        BOOLEAN NOT NULL DEFAULT FALSE,
+    nearest_item_id   INT REFERENCES items(id) ON DELETE SET NULL,
+
+    details           JSONB NOT NULL DEFAULT '{}',
+    computed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Final trust scores
+CREATE TABLE IF NOT EXISTS trust_scores (
+    id                SERIAL PRIMARY KEY,
+    project_id        INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    item_id           INT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+
+    gold_score        NUMERIC(10,6),
+    agreement_score   NUMERIC(10,6),
+    behavioral_score  NUMERIC(10,6),
+    embedding_score   NUMERIC(10,6),
+
+    final_score       NUMERIC(10,6) NOT NULL,
+    flagged           BOOLEAN NOT NULL DEFAULT FALSE,
+
+    breakdown         JSONB NOT NULL DEFAULT '{}',
+
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ
+);
+
+-- Phase 2 indexes
+CREATE INDEX idx_behavioral_scores_project
+    ON behavioral_scores (project_id);
+
+CREATE INDEX idx_behavioral_scores_annotator
+    ON behavioral_scores (annotator_id);
+
+CREATE INDEX idx_behavioral_scores_item
+    ON behavioral_scores (item_id);
+
+CREATE INDEX idx_embedding_results_project
+    ON embedding_results (project_id);
+
+CREATE INDEX idx_embedding_results_item
+    ON embedding_results (item_id);
+
+CREATE INDEX idx_embedding_results_outlier
+    ON embedding_results (project_id, is_outlier)
+    WHERE is_outlier = TRUE;
+
+CREATE INDEX idx_trust_scores_project
+    ON trust_scores (project_id);
+
+CREATE INDEX idx_trust_scores_item
+    ON trust_scores (item_id);
+
+CREATE INDEX idx_trust_scores_flagged
+    ON trust_scores (project_id, flagged)
+    WHERE flagged = TRUE;
