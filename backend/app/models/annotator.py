@@ -3,8 +3,10 @@ Annotator model representing human or model annotators.
 """
 
 from datetime import datetime
+
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.orm import relationship
+
 from app.core.db import Base
 
 
@@ -12,9 +14,14 @@ class Annotator(Base):
     """
     Represents an annotator providing labels.
     """
+
     __tablename__ = "annotators"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     username = Column(
         String(100),
@@ -34,7 +41,6 @@ class Annotator(Base):
         nullable=False,
     )
 
-    # Relationships
     annotations = relationship(
         "Annotation",
         back_populates="annotator",
