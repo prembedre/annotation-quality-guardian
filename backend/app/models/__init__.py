@@ -3,6 +3,7 @@ Database models export module.
 """
 
 from app.core.db import Base
+
 from app.models.project import Project
 from app.models.item import Item
 from app.models.annotator import Annotator
