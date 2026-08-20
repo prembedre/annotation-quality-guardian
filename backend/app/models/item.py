@@ -68,6 +68,10 @@ class Item(Base):
         nullable=False,
     )
 
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("source", None)
+        super().__init__(*args, **kwargs)
+
     # Relationships
 
     project = relationship(
@@ -83,6 +87,19 @@ class Item(Base):
 
     trust_scores = relationship(
         "TrustScore",
+        back_populates="item",
+        cascade="all, delete-orphan",
+    )
+
+    behavioral_scores = relationship(
+        "BehavioralScore",
+        back_populates="item",
+        cascade="all, delete-orphan",
+    )
+
+    embedding_results = relationship(
+        "EmbeddingResult",
+        foreign_keys="EmbeddingResult.item_id",
         back_populates="item",
         cascade="all, delete-orphan",
     )

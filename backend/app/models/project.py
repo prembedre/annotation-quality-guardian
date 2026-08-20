@@ -75,5 +75,17 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
 
+    behavioral_scores = relationship(
+        "BehavioralScore",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    embedding_results = relationship(
+        "EmbeddingResult",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self) -> str:
         return f"<Project(id={self.id}, name='{self.name}')>"

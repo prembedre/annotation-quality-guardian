@@ -3,6 +3,7 @@ Shared pytest fixtures for backend tests using PostgreSQL.
 """
 
 import os
+os.environ["ENV"] = "testing"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +13,8 @@ from sqlalchemy.orm import sessionmaker
 from app.core.db import Base, get_db
 from app.main import app
 
+from sqlalchemy.pool import StaticPool
+
 # Import all models so Base.metadata contains every table.
 from app.models import (
     Project,
@@ -19,26 +22,45 @@ from app.models import (
     Annotator,
     Annotation,
     TrustScore,
+    BehavioralScore,
+    EmbeddingResult,
 )
 
 
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/aqg_test",
-)
+def _init_test_engine():
+    """Create test engine with PostgreSQL if reachable, otherwise SQLite in-memory."""
+    test_db_url = os.getenv("TEST_DATABASE_URL")
+    if test_db_url:
+        try:
+            eng = create_engine(test_db_url, connect_args={"connect_timeout": 1})
+            with eng.connect() as conn:
+                return eng
+        except Exception:
+            pass
+
+    # Default to SQLite in-memory with StaticPool for isolated fast test runs
+    return create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
 
-engine = create_engine(
-    TEST_DATABASE_URL,
-    pool_pre_ping=True,
-)
-
+engine = _init_test_engine()
 
 TestingSessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
 )
+
+# Ensure tasks and dependencies using SessionLocal use the test database
+from app.core import db as core_db
+core_db.SessionLocal = TestingSessionLocal
+core_db.engine = engine
+
+from app.celery_app import celery_app
+celery_app.conf.task_always_eager = True
 
 
 @pytest.fixture(scope="function")

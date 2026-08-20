@@ -113,6 +113,20 @@ class TrustScore(Base):
         back_populates="trust_scores",
     )
 
+    def __init__(self, *args, **kwargs):
+        if "score" in kwargs and "final_score" not in kwargs:
+            kwargs["final_score"] = kwargs.pop("score")
+        super().__init__(*args, **kwargs)
+
+    @property
+    def score(self):
+        """Alias for final_score to preserve Phase 1 compatibility."""
+        return float(self.final_score) if self.final_score is not None else None
+
+    @score.setter
+    def score(self, value):
+        self.final_score = value
+
     def __repr__(self) -> str:
         return (
             f"<TrustScore("

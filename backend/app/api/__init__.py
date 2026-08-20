@@ -2,7 +2,7 @@
 API routes module init.
 """
 
-from app.api import health, annotations, projects, scores, review, export, ingestion
+from app.api import health, annotations, projects, scores, review, export, ingestion, jobs
 
 __all__ = [
     "health",
@@ -12,4 +12,5 @@ __all__ = [
     "review",
     "export",
     "ingestion",
+    "jobs",
 ]

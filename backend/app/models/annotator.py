@@ -47,5 +47,25 @@ class Annotator(Base):
         cascade="all, delete-orphan",
     )
 
+    behavioral_scores = relationship(
+        "BehavioralScore",
+        back_populates="annotator",
+        cascade="all, delete-orphan",
+    )
+
+    def __init__(self, *args, **kwargs):
+        if "name" in kwargs and "username" not in kwargs:
+            kwargs["username"] = kwargs.pop("name")
+        super().__init__(*args, **kwargs)
+
+    @property
+    def name(self) -> str:
+        """Alias for username to preserve backwards compatibility."""
+        return self.username
+
+    @name.setter
+    def name(self, value: str):
+        self.username = value
+
     def __repr__(self) -> str:
         return f"<Annotator(id={self.id}, username='{self.username}')>"

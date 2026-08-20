@@ -25,6 +25,20 @@ from app.schemas.export import (
     DatasetExportItem,
     DatasetExportResponse,
 )
+from app.schemas.behavioral import (
+    BehavioralScoreCreate,
+    BehavioralScoreResponse,
+)
+from app.schemas.embedding import (
+    EmbeddingResultCreate,
+    EmbeddingResultResponse,
+)
+from app.schemas.jobs import (
+    BehavioralJobRequest,
+    EmbeddingJobRequest,
+    TrustScoreJobRequest,
+    JobStatusResponse,
+)
 
 __all__ = [
     "AnnotationCreate",
@@ -40,4 +54,12 @@ __all__ = [
     "ReviewResolveResponse",
     "DatasetExportItem",
     "DatasetExportResponse",
+    "BehavioralScoreCreate",
+    "BehavioralScoreResponse",
+    "EmbeddingResultCreate",
+    "EmbeddingResultResponse",
+    "BehavioralJobRequest",
+    "EmbeddingJobRequest",
+    "TrustScoreJobRequest",
+    "JobStatusResponse",
 ]

@@ -44,8 +44,21 @@ class Settings(BaseSettings):
         description="SQLAlchemy Database connection URI (PostgreSQL)",
     )
 
-    # ── Cache / Queue (Optional) ──
+    # ── Cache / Queue / Celery ──
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
+    CELERY_TASK_ALWAYS_EAGER: bool = False
+
+    @property
+    def celery_broker(self) -> str:
+        """Return Celery broker URL, falling back to REDIS_URL."""
+        return self.CELERY_BROKER_URL or self.REDIS_URL or "redis://localhost:6379/0"
+
+    @property
+    def celery_backend(self) -> str:
+        """Return Celery result backend URL, falling back to REDIS_URL."""
+        return self.CELERY_RESULT_BACKEND or self.REDIS_URL or "redis://localhost:6379/0"
 
     # ── CORS ──
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"

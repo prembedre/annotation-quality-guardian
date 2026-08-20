@@ -71,7 +71,8 @@ class Annotation(Base):
         nullable=True,
     )
 
-    metadata = Column(
+    metadata_ = Column(
+        "metadata",
         JSON,
         nullable=False,
         default=dict,
@@ -89,6 +90,11 @@ class Annotation(Base):
         nullable=True,
         onupdate=datetime.utcnow,
     )
+
+    def __init__(self, *args, **kwargs):
+        if "metadata" in kwargs and "metadata_" not in kwargs:
+            kwargs["metadata_"] = kwargs.pop("metadata")
+        super().__init__(*args, **kwargs)
 
     # Relationships
 
