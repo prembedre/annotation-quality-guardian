@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# revision identifiers, used by Alembic.
+# Revision identifiers, used by Alembic.
 revision: str = "0002_phase2_scoring"
 down_revision: Union[str, None] = "0001_initial_schema"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -19,7 +19,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ── 0. Ensure projects table exists ───────────────────────
+
+    # ==========================================================
+    # 0. Ensure projects table exists
+    # ==========================================================
+
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
@@ -40,17 +44,54 @@ def upgrade() -> None:
             unique=False,
         )
 
-    # ── 1. Behavioral scoring results ─────────────────────────
+    # ==========================================================
+    # 1. Behavioral scoring results
+    # ==========================================================
+
     op.create_table(
         "behavioral_scores",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("project_id", sa.Integer(), nullable=False),
-        sa.Column("annotator_id", sa.Integer(), nullable=False),
-        sa.Column("item_id", sa.Integer(), nullable=True),
 
-        sa.Column("time_score", sa.Numeric(10, 6), nullable=True),
-        sa.Column("streak_score", sa.Numeric(10, 6), nullable=True),
-        sa.Column("anomaly_score", sa.Numeric(10, 6), nullable=True),
+        sa.Column(
+            "id",
+            sa.Integer(),
+            nullable=False,
+        ),
+
+        sa.Column(
+            "project_id",
+            sa.Integer(),
+            nullable=False,
+        ),
+
+        sa.Column(
+            "annotator_id",
+            sa.Integer(),
+            nullable=False,
+        ),
+
+        sa.Column(
+            "item_id",
+            sa.Integer(),
+            nullable=True,
+        ),
+
+        sa.Column(
+            "time_score",
+            sa.Numeric(10, 6),
+            nullable=True,
+        ),
+
+        sa.Column(
+            "streak_score",
+            sa.Numeric(10, 6),
+            nullable=True,
+        ),
+
+        sa.Column(
+            "anomaly_score",
+            sa.Numeric(10, 6),
+            nullable=True,
+        ),
 
         sa.Column(
             "details",
@@ -71,11 +112,13 @@ def upgrade() -> None:
             ["projects.id"],
             ondelete="CASCADE",
         ),
+
         sa.ForeignKeyConstraint(
             ["annotator_id"],
             ["annotators.id"],
             ondelete="CASCADE",
         ),
+
         sa.ForeignKeyConstraint(
             ["item_id"],
             ["items.id"],
@@ -86,6 +129,7 @@ def upgrade() -> None:
     )
 
     # Behavioral indexes
+
     op.create_index(
         "idx_behavioral_scores_project",
         "behavioral_scores",
@@ -104,12 +148,30 @@ def upgrade() -> None:
         ["item_id"],
     )
 
-    # ── 2. Embedding results ──────────────────────────────────
+    # ==========================================================
+    # 2. Embedding results
+    # ==========================================================
+
     op.create_table(
         "embedding_results",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("project_id", sa.Integer(), nullable=False),
-        sa.Column("item_id", sa.Integer(), nullable=False),
+
+        sa.Column(
+            "id",
+            sa.Integer(),
+            nullable=False,
+        ),
+
+        sa.Column(
+            "project_id",
+            sa.Integer(),
+            nullable=False,
+        ),
+
+        sa.Column(
+            "item_id",
+            sa.Integer(),
+            nullable=False,
+        ),
 
         sa.Column(
             "model_name",
@@ -178,6 +240,7 @@ def upgrade() -> None:
     )
 
     # Embedding indexes
+
     op.create_index(
         "idx_embedding_results_project",
         "embedding_results",
@@ -197,14 +260,23 @@ def upgrade() -> None:
         postgresql_where=sa.text("is_outlier = TRUE"),
     )
 
-    # ── 3. Extend existing Phase 1 trust_scores table ─────────
-    #
+    # ==========================================================
+    # 3. Extend Phase 1 trust_scores table
+    # ==========================================================
+
     # IMPORTANT:
     # Do NOT recreate trust_scores.
-    # Phase 1 already created this table.
     #
-    # Existing columns such as score, breakdown and flagged
-    # are preserved.
+    # Phase 1 already created this table.
+    # Existing columns are preserved:
+    #
+    # id
+    # item_id
+    # score
+    # breakdown
+    # flagged
+    # created_at
+    # updated_at
 
     op.add_column(
         "trust_scores",
@@ -260,12 +332,15 @@ def upgrade() -> None:
         ),
     )
 
-    # Preserve existing Phase 1 scores.
+    # ==========================================================
+    # 4. Preserve existing Phase 1 trust scores
+    # ==========================================================
+
+    # Copy the existing Phase 1 score into the new Phase 2
+    # final_score column.
     #
-    # Phase 1 has `score`.
-    # Phase 2 uses `final_score`.
-    #
-    # Copy the old score so existing data is not lost.
+    # This prevents existing Phase 1 score data from being lost.
+
     op.execute(
         """
         UPDATE trust_scores
@@ -274,8 +349,9 @@ def upgrade() -> None:
         """
     )
 
-    # Existing Phase 1 rows now have a final_score.
-    # Make the new column NOT NULL.
+    # Phase 1 score is NOT NULL, therefore every existing
+    # Phase 1 trust score should now have final_score.
+
     op.alter_column(
         "trust_scores",
         "final_score",
@@ -283,7 +359,23 @@ def upgrade() -> None:
         nullable=False,
     )
 
-    # ── 4. Trust score indexes ────────────────────────────────
+    # ==========================================================
+    # 5. Add trust_scores -> projects foreign key
+    # ==========================================================
+
+    op.create_foreign_key(
+        "fk_trust_scores_project",
+        "trust_scores",
+        "projects",
+        ["project_id"],
+        ["id"],
+        ondelete="CASCADE",
+    )
+
+    # ==========================================================
+    # 6. Trust score indexes
+    # ==========================================================
+
     op.create_index(
         "idx_trust_scores_project",
         "trust_scores",
@@ -299,7 +391,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # ── Remove Phase 2 trust-score indexes ─────────────────────
+
+    # ==========================================================
+    # Remove trust score indexes
+    # ==========================================================
+
     op.drop_index(
         "idx_trust_scores_flagged_project",
         table_name="trust_scores",
@@ -310,7 +406,20 @@ def downgrade() -> None:
         table_name="trust_scores",
     )
 
-    # ── Remove Phase 2 trust-score columns ─────────────────────
+    # ==========================================================
+    # Remove trust_scores foreign key
+    # ==========================================================
+
+    op.drop_constraint(
+        "fk_trust_scores_project",
+        "trust_scores",
+        type_="foreignkey",
+    )
+
+    # ==========================================================
+    # Remove Phase 2 trust score columns
+    # ==========================================================
+
     op.drop_column(
         "trust_scores",
         "final_score",
@@ -341,7 +450,10 @@ def downgrade() -> None:
         "project_id",
     )
 
-    # ── Remove embedding indexes and table ────────────────────
+    # ==========================================================
+    # Remove embedding indexes and table
+    # ==========================================================
+
     op.drop_index(
         "idx_embedding_results_outlier",
         table_name="embedding_results",
@@ -361,7 +473,10 @@ def downgrade() -> None:
         "embedding_results",
     )
 
-    # ── Remove behavioral indexes and table ───────────────────
+    # ==========================================================
+    # Remove behavioral indexes and table
+    # ==========================================================
+
     op.drop_index(
         "idx_behavioral_scores_item",
         table_name="behavioral_scores",
@@ -381,7 +496,9 @@ def downgrade() -> None:
         "behavioral_scores",
     )
 
-    # ── Do NOT drop projects ──────────────────────────────────
+    # ==========================================================
+    # Do NOT drop projects
+    # ==========================================================
     #
-    # projects may have existed before this migration.
-    # Leaving it untouched protects Phase 1 data.
+    # projects may already contain important data.
+    # Leaving it untouched protects existing data.
