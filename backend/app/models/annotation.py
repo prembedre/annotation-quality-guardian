@@ -3,6 +3,7 @@ Annotation model representing a label given to an Item by an Annotator.
 """
 
 from datetime import datetime
+
 from sqlalchemy import (
     Column,
     Integer,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import relationship
+
 from app.core.db import Base
 
 
@@ -22,9 +24,14 @@ class Annotation(Base):
     Represents an annotation decision submitted by an Annotator
     for a specific Item.
     """
+
     __tablename__ = "annotations"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     project_id = Column(
         Integer,
@@ -84,6 +91,7 @@ class Annotation(Base):
     )
 
     # Relationships
+
     project = relationship(
         "Project",
         back_populates="annotations",
