@@ -12,16 +12,15 @@ from sqlalchemy.orm import sessionmaker
 from app.core.db import Base, get_db
 from app.main import app
 
+# Import all models so Base.metadata contains every table.
+from app.models import (
+    Project,
+    Item,
+    Annotator,
+    Annotation,
+    TrustScore,
+)
 
-# ============================================================
-# PostgreSQL Test Database
-# ============================================================
-
-# Tests use a separate PostgreSQL database so that the actual
-# project database (aqg_db) and its Phase 1 data are protected.
-#
-# You can override this using the TEST_DATABASE_URL environment
-# variable.
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
@@ -29,18 +28,11 @@ TEST_DATABASE_URL = os.getenv(
 )
 
 
-# ============================================================
-# PostgreSQL Engine
-# ============================================================
-
 engine = create_engine(
     TEST_DATABASE_URL,
+    pool_pre_ping=True,
 )
 
-
-# ============================================================
-# PostgreSQL Session
-# ============================================================
 
 TestingSessionLocal = sessionmaker(
     autocommit=False,
@@ -49,18 +41,13 @@ TestingSessionLocal = sessionmaker(
 )
 
 
-# ============================================================
-# Database Fixture
-# ============================================================
-
 @pytest.fixture(scope="function")
 def db_session():
     """
     Provide a PostgreSQL database session for each test.
-
-    Each test gets its own session. Changes are rolled back
-    when the test finishes.
     """
+
+    Base.metadata.create_all(bind=engine)
 
     db = TestingSessionLocal()
 
@@ -70,16 +57,14 @@ def db_session():
         db.rollback()
         db.close()
 
+        Base.metadata.drop_all(bind=engine)
 
-# ============================================================
-# FastAPI Test Client Fixture
-# ============================================================
 
 @pytest.fixture(scope="function")
 def client(db_session):
     """
     Create a FastAPI TestClient using the PostgreSQL
-    database session.
+    test database session.
     """
 
     def override_get_db():
@@ -88,11 +73,9 @@ def client(db_session):
         finally:
             pass
 
-    # Override FastAPI's normal database dependency.
     app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(app) as test_client:
         yield test_client
 
-    # Remove the dependency override after the test.
     app.dependency_overrides.clear()
