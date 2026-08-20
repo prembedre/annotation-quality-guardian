@@ -19,6 +19,26 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # ── 0. Ensure projects table exists ───────────────────────
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if "projects" not in inspector.get_table_names():
+        op.create_table(
+            "projects",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("name", sa.String(length=255), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("label_set", sa.JSON(), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            "ix_projects_id",
+            "projects",
+            ["id"],
+            unique=False,
+        )
+
     # ── 1. Behavioral scoring results ─────────────────────────
     op.create_table(
         "behavioral_scores",
