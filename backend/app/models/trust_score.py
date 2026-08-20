@@ -113,6 +113,12 @@ class TrustScore(Base):
         back_populates="trust_scores",
     )
 
+    trust_scores = relationship(
+    "TrustScore",
+    back_populates="project",
+    cascade="all, delete-orphan",
+    )
+
     def __repr__(self) -> str:
         return (
             f"<TrustScore("
