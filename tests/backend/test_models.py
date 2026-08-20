@@ -7,7 +7,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.db import Base
-from app.models import Project, Item, Annotator, Annotation, TrustScore
+from app.models import (
+    Project,
+    Item,
+    Annotator,
+    Annotation,
+    TrustScore,
+    BehavioralScore,
+    EmbeddingResult,
+)
 
 
 @pytest.fixture
@@ -87,7 +95,7 @@ def test_create_annotator(db_session):
 
 
 def test_create_annotation_and_trust_score(db_session):
-    """Test annotation and trust score relationships."""
+    """Test annotation and Phase 2 trust score relationships."""
 
     project = Project(
         name="Quality Test",
@@ -122,12 +130,18 @@ def test_create_annotation_and_trust_score(db_session):
     )
 
     trust_score = TrustScore(
+        project_id=project.id,
         item_id=item.id,
-        score=0.92,
+        gold_score=1.0,
+        agreement_score=0.88,
+        behavioral_score=0.90,
+        embedding_score=0.85,
+        final_score=0.92,
         breakdown={
-            "gold_accuracy": 1.0,
+            "gold": 1.0,
             "agreement": 0.88,
-            "anomaly": 0.0,
+            "behavioral": 0.90,
+            "embedding": 0.85,
         },
         flagged=False,
     )
@@ -147,11 +161,11 @@ def test_create_annotation_and_trust_score(db_session):
     assert annotation.label == "positive"
     assert annotation.confidence == 0.98
 
+    assert trust_score.project_id == project.id
     assert trust_score.item_id == item.id
-    assert trust_score.score == 0.92
+    assert float(trust_score.final_score) == 0.92
     assert trust_score.flagged is False
 
-    # Relationship checks
     assert len(item.annotations) == 1
     assert len(item.trust_scores) == 1
     assert item.annotations[0].label == "positive"
@@ -162,6 +176,108 @@ def test_create_annotation_and_trust_score(db_session):
     assert len(project.items) == 1
     assert len(project.annotations) == 1
     assert len(annotator.annotations) == 1
+
+
+def test_create_behavioral_score(db_session):
+    """Test creating a behavioral scoring result."""
+
+    project = Project(
+        name="Behavioral Test",
+        label_set=["yes", "no"],
+    )
+
+    annotator = Annotator(
+        username="behavior_user",
+        email="behavior@example.com",
+    )
+
+    db_session.add_all([project, annotator])
+    db_session.commit()
+
+    item = Item(
+        project_id=project.id,
+        external_id="behavior-item",
+        content={"text": "Behavior test"},
+    )
+
+    db_session.add(item)
+    db_session.commit()
+
+    behavioral_score = BehavioralScore(
+        project_id=project.id,
+        annotator_id=annotator.id,
+        item_id=item.id,
+        time_score=0.90,
+        streak_score=0.85,
+        anomaly_score=0.10,
+        details={
+            "reason": "Normal annotation behavior",
+        },
+    )
+
+    db_session.add(behavioral_score)
+    db_session.commit()
+    db_session.refresh(behavioral_score)
+
+    assert behavioral_score.id is not None
+    assert behavioral_score.project_id == project.id
+    assert behavioral_score.annotator_id == annotator.id
+    assert behavioral_score.item_id == item.id
+    assert float(behavioral_score.time_score) == 0.90
+    assert float(behavioral_score.streak_score) == 0.85
+    assert float(behavioral_score.anomaly_score) == 0.10
+
+
+def test_create_embedding_result(db_session):
+    """Test creating an embedding result."""
+
+    project = Project(
+        name="Embedding Test",
+        label_set=["positive", "negative"],
+    )
+
+    db_session.add(project)
+    db_session.commit()
+
+    item = Item(
+        project_id=project.id,
+        external_id="embedding-item",
+        content={"text": "Embedding test"},
+    )
+
+    nearest_item = Item(
+        project_id=project.id,
+        external_id="nearest-item",
+        content={"text": "Nearest item"},
+    )
+
+    db_session.add_all([item, nearest_item])
+    db_session.commit()
+
+    embedding_result = EmbeddingResult(
+        project_id=project.id,
+        item_id=item.id,
+        model_name="sentence-transformers",
+        embedding=[0.12, 0.45, 0.78],
+        outlier_score=0.18,
+        is_outlier=False,
+        nearest_item_id=nearest_item.id,
+        details={
+            "method": "cosine_similarity",
+        },
+    )
+
+    db_session.add(embedding_result)
+    db_session.commit()
+    db_session.refresh(embedding_result)
+
+    assert embedding_result.id is not None
+    assert embedding_result.project_id == project.id
+    assert embedding_result.item_id == item.id
+    assert embedding_result.model_name == "sentence-transformers"
+    assert float(embedding_result.outlier_score) == 0.18
+    assert embedding_result.is_outlier is False
+    assert embedding_result.nearest_item_id == nearest_item.id
 
 
 def test_annotation_unique_per_item_and_annotator(db_session):
