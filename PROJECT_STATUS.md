@@ -125,11 +125,13 @@ tests\backend\test_trust_score_service.py .....                          [100%]
 
 ## 6. Recent Git Commit Log
 
+* `c31b2fe` — `docs: update PROJECT_PROGRESS_REPORT.md to reflect Phase 2 completion`
+* `2526e04` — `docs: update PROJECT_STATUS.md to reflect Phase 2 completion`
 * `379c58e` — `feat: Phase 2 backend - Celery tasks, behavioral & embedding services, unified trust score pipeline, job APIs, and tests`
-* `29ed8c8` — `docs: update PROJECT_STATUS.md with Phase 1 details`
-* `172af76` — `docs: document phase 1 backend apis`
-* `b371727` — `test: add backend integration tests`
-* `cc98ff2` — `feat: add dataset export api`
-* `0694a40` — `feat: add flagged item review queue api`
-* `fe502fc` — `feat: complete csv json annotation ingestion`
-* `8ab9051` — `Add seed script to sample flagged records for testing`
+* `29ed8c8` — `Refactor review queue and resolve endpoints`
+* `0b43bf2` — `Update test_review_queue.py`
+* `e61f04f` — `Refactor project export tests for clarity and structure`
+* `4350db5` — `Enhance test coverage for scores and results`
+* `2e353fc` — `Add BehavioralScore and EmbeddingResult to models`
+* `c4f0ec9` — `Remove trust_scores relationship from TrustScore model`
+* `15576ad` — `Update trust_score.py`
