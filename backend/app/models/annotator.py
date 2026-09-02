@@ -53,6 +53,13 @@ class Annotator(Base):
         cascade="all, delete-orphan",
     )
 
+    reviewed_decisions = relationship(
+        "ReviewerDecision",
+        foreign_keys="[ReviewerDecision.reviewed_by]",
+        back_populates="reviewer",
+    )
+
+
     def __init__(self, *args, **kwargs):
         if "name" in kwargs and "username" not in kwargs:
             kwargs["username"] = kwargs.pop("name")

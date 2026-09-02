@@ -2,9 +2,9 @@
 
 **Repository:** [prembedre/annotation-quality-guardian](https://github.com/prembedre/annotation-quality-guardian)  
 **Branch:** `main`  
-**Current Milestone:** Phase 2 — ML Quality Signals & Integration  
+**Current Milestone:** Phase 3 — Configurable Thresholds & Reviewer Workflow  
 **Status Date:** August 20, 2026  
-**Overall Phase 2 Status:** 🟢 **100% Complete (Backend & Integration)**
+**Overall Phase 3 Status:** 🟡 **Partially Complete (Database 100%, Backend ~60%)**
 
 ---
 

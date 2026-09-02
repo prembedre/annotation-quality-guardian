@@ -47,9 +47,23 @@ class ReviewQueueResponse(BaseModel):
 
 
 class ReviewResolveRequest(BaseModel):
-    """Payload for resolving a flagged item."""
-    ground_truth_label: str = Field(..., min_length=1, description="The assigned ground-truth label")
-    notes: Optional[str] = Field(None, description="Optional reviewer notes or rationale")
+    """Payload for resolving a flagged item with confirm, correct, or escalate action."""
+    action: Optional[str] = Field(
+        None,
+        description="Reviewer decision action: 'confirm', 'correct', or 'escalate'. Defaults to 'correct' if ground_truth_label is given.",
+    )
+    correct_label: Optional[str] = Field(
+        None,
+        description="The corrected label when action is 'correct' or 'confirm'",
+    )
+    ground_truth_label: Optional[str] = Field(
+        None,
+        description="Legacy alias for correct_label (assigned ground-truth label)",
+    )
+    notes: Optional[str] = Field(
+        None,
+        description="Optional reviewer notes or rationale",
+    )
 
 
 class ReviewResolveResponse(BaseModel):
@@ -57,5 +71,9 @@ class ReviewResolveResponse(BaseModel):
     success: bool
     item_id: int
     status: str = "resolved"
-    gold_label: str
+    action: Optional[str] = None
+    gold_label: Optional[str] = None
+    trust_score: Optional[float] = None
+    flagged: bool = False
     message: str = "Item resolved successfully"
+

@@ -12,7 +12,10 @@ INSERT INTO projects (name, description, label_set) VALUES
 INSERT INTO annotators (username, email) VALUES
     ('alice',   'alice@example.com'),
     ('bob',     'bob@example.com'),
-    ('charlie', 'charlie@example.com');
+    ('charlie', 'charlie@example.com'),
+    ('david',   'david@example.com'),
+    ('eva',     'eva@example.com');
+
 
 -- ── Items (including gold-standard items) ────────────────────
 INSERT INTO items (project_id, external_id, content, is_gold, gold_label) VALUES
@@ -156,3 +159,67 @@ INSERT INTO trust_scores (
             "embedding": 0.13
         }'
     );
+
+-- ============================================================
+-- Phase 3 Sample Data
+-- ============================================================
+
+-- Additional annotations for David (annotator 4) and Eva (annotator 5)
+INSERT INTO annotations (project_id, item_id, annotator_id, label, confidence, duration_ms) VALUES
+    (1, 1, 4, 'positive', 0.94, 3000),
+    (1, 2, 4, 'negative', 0.89, 2700),
+    (1, 3, 4, 'neutral',  0.82, 4000),
+    (1, 4, 4, 'positive', 0.90, 3200),
+    (1, 5, 4, 'negative', 0.86, 3100),
+    (1, 6, 4, 'neutral',  0.72, 4200),
+    (1, 1, 5, 'positive', 0.91, 3300),
+    (1, 2, 5, 'negative', 0.87, 2950),
+    (1, 3, 5, 'negative', 0.50, 6000),  -- disagreement
+    (1, 4, 5, 'positive', 0.89, 3400),
+    (1, 5, 5, 'positive', 0.40, 5800),  -- disagreement
+    (1, 6, 5, 'neutral',  0.78, 3900);
+
+-- Project Scoring Threshold Configurations
+INSERT INTO project_thresholds (
+    project_id,
+    gold_threshold,
+    kappa_threshold,
+    behavioral_threshold,
+    embedding_threshold,
+    trust_threshold
+) VALUES
+    (1, 0.90, 0.70, 0.75, 0.80, 0.60),
+    (2, 0.85, 0.65, 0.70, 0.75, 0.55);
+
+-- Reviewer Decisions
+INSERT INTO reviewer_decisions (
+    project_id,
+    item_id,
+    annotation_id,
+    review_status,
+    reviewed_by,
+    corrected_label,
+    review_notes
+) VALUES
+    (
+        1, 4, NULL,
+        'CONFIRM',
+        1,
+        'positive',
+        'Confirmed majority label as gold label.'
+    ),
+    (
+        1, 5, NULL,
+        'CORRECT',
+        1,
+        'negative',
+        'Corrected ambiguous label to negative based on reviewer inspection.'
+    ),
+    (
+        1, 6, NULL,
+        'ESCALATE',
+        3,
+        NULL,
+        'Escalated to lead annotator due to split vote across annotators.'
+    );
+

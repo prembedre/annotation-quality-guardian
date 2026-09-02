@@ -151,3 +151,64 @@ CREATE INDEX idx_trust_scores_item
 CREATE INDEX idx_trust_scores_flagged
     ON trust_scores (project_id, flagged)
     WHERE flagged = TRUE;
+
+-- ============================================================
+-- Phase 3 Tables
+-- ============================================================
+
+-- Project-wise configurable scoring thresholds
+CREATE TABLE IF NOT EXISTS project_thresholds (
+    id                   SERIAL PRIMARY KEY,
+    project_id           INT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+    gold_threshold       NUMERIC(10,6) NOT NULL DEFAULT 0.900000,
+    kappa_threshold      NUMERIC(10,6) NOT NULL DEFAULT 0.700000,
+    behavioral_threshold NUMERIC(10,6) NOT NULL DEFAULT 0.750000,
+    embedding_threshold  NUMERIC(10,6) NOT NULL DEFAULT 0.800000,
+    trust_threshold      NUMERIC(10,6) NOT NULL DEFAULT 0.600000,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Reviewer resolve workflow decisions
+CREATE TABLE IF NOT EXISTS reviewer_decisions (
+    id               SERIAL PRIMARY KEY,
+    project_id       INT REFERENCES projects(id) ON DELETE CASCADE,
+    item_id          INT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    annotation_id    INT REFERENCES annotations(id) ON DELETE SET NULL,
+    review_status    VARCHAR(50) NOT NULL, -- 'CONFIRM', 'CORRECT', 'ESCALATE'
+    reviewed_by      INT REFERENCES annotators(id) ON DELETE SET NULL,
+    reviewed_at      TIMESTAMPTZ DEFAULT NOW(),
+    corrected_label  VARCHAR(255),
+    review_notes     TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Phase 3 performance indexes for leaderboards, agreement heatmaps, and dashboard analytics
+CREATE INDEX idx_annotations_proj_annot_created
+    ON annotations (project_id, annotator_id, created_at);
+
+CREATE INDEX idx_annotations_proj_label
+    ON annotations (project_id, label);
+
+CREATE INDEX idx_annotations_item_label
+    ON annotations (item_id, label);
+
+CREATE INDEX idx_trust_scores_proj_score
+    ON trust_scores (project_id, final_score);
+
+CREATE INDEX idx_quality_scores_annotator
+    ON quality_scores (annotator_id, metric);
+
+CREATE INDEX idx_reviewer_decisions_project
+    ON reviewer_decisions (project_id);
+
+CREATE INDEX idx_reviewer_decisions_item
+    ON reviewer_decisions (item_id);
+
+CREATE INDEX idx_reviewer_decisions_reviewer
+    ON reviewer_decisions (reviewed_by);
+
+CREATE INDEX idx_reviewer_decisions_status
+    ON reviewer_decisions (review_status);
+

@@ -3,6 +3,7 @@ API routes for flagged-item review queue and human resolution.
 """
 
 import math
+from collections import Counter
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,6 +19,8 @@ from app.schemas.review import (
     ReviewResolveRequest,
     ReviewResolveResponse,
 )
+from app.services.trust_score_service import compute_and_save_item_trust_score
+
 
 
 router = APIRouter()
@@ -274,14 +277,9 @@ async def resolve_review_item(
     db: Session = Depends(get_db),
 ):
     """
-    Resolve a flagged item by assigning a ground-truth
-    label and clearing review flags.
+    Resolve a flagged item by reviewer action (confirm, correct, or escalate),
+    assigning a ground-truth label, updating flags, and recalculating Trust Score.
     """
-
-    # ---------------------------------------------------------
-    # Find item
-    # ---------------------------------------------------------
-
     item = (
         db.query(Item)
         .filter(Item.id == item_id)
@@ -294,79 +292,109 @@ async def resolve_review_item(
             detail=f"Item with ID {item_id} not found",
         )
 
-    # ---------------------------------------------------------
-    # Assign gold ground-truth label
-    # ---------------------------------------------------------
+    # Determine action
+    raw_action = payload.action.lower().strip() if payload.action else None
+    if not raw_action:
+        if payload.ground_truth_label or payload.correct_label:
+            action = "correct"
+        else:
+            action = "confirm"
+    else:
+        action = raw_action
 
-    item.gold_label = (
-        payload.ground_truth_label.strip()
-    )
-
-    item.is_gold = True
-
-    # ---------------------------------------------------------
-    # Update trust scores
-    # ---------------------------------------------------------
-
-    trust_scores = (
-        db.query(TrustScore)
-        .filter(
-            TrustScore.item_id == item.id
-        )
-        .all()
-    )
-
-    for trust_score in trust_scores:
-
-        trust_score.flagged = False
-
-        breakdown = dict(
-            trust_score.breakdown or {}
+    if action not in {"confirm", "correct", "escalate"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action '{action}'. Allowed actions are 'confirm', 'correct', 'escalate'.",
         )
 
-        breakdown[
-            "resolved_gold_label"
-        ] = payload.ground_truth_label.strip()
+    # 1. Action: CORRECT
+    if action == "correct":
+        new_label = payload.correct_label or payload.ground_truth_label
+        if not new_label or not new_label.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="A correct_label or ground_truth_label is required for 'correct' action.",
+            )
+        item.gold_label = new_label.strip()
+        item.is_gold = True
 
-        if payload.notes:
-            breakdown[
-                "resolution_notes"
-            ] = payload.notes.strip()
+    # 2. Action: CONFIRM
+    elif action == "confirm":
+        new_label = payload.correct_label or payload.ground_truth_label
+        if new_label and new_label.strip():
+            item.gold_label = new_label.strip()
+        elif item.gold_label:
+            pass
+        elif item.annotations:
+            counts = Counter(a.label for a in item.annotations)
+            item.gold_label = counts.most_common(1)[0][0]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot confirm item without existing label or annotations.",
+            )
+        item.is_gold = True
 
-        trust_score.breakdown = breakdown
-
-    # ---------------------------------------------------------
-    # Commit changes
-    # ---------------------------------------------------------
+    # 3. Action: ESCALATE
+    elif action == "escalate":
+        pass
 
     try:
-
         db.commit()
         db.refresh(item)
 
-    except Exception as exc:
-
-        db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Failed to resolve review item: "
-                f"{str(exc)}"
-            ),
+        # Recalculate Trust Score for the item
+        updated_ts = compute_and_save_item_trust_score(
+            db=db,
+            project_id=item.project_id,
+            item_id=item.id,
         )
 
-    # ---------------------------------------------------------
-    # Return response
-    # ---------------------------------------------------------
+        # Update breakdown with resolution metadata
+        if updated_ts:
+            breakdown = dict(updated_ts.breakdown or {})
+            breakdown["resolution_action"] = action
+            if action in {"confirm", "correct"}:
+                breakdown["resolved_gold_label"] = item.gold_label
+                updated_ts.flagged = False
+            elif action == "escalate":
+                breakdown["escalated"] = True
+                updated_ts.flagged = True
 
-    return ReviewResolveResponse(
-        success=True,
-        item_id=item.id,
-        status="resolved",
-        gold_label=item.gold_label,
-        message=(
-            f"Item {item.id} resolved with gold label "
-            f"'{item.gold_label}'"
-        ),
-    )
+            if payload.notes:
+                breakdown["resolution_notes"] = payload.notes.strip()
+
+            updated_ts.breakdown = breakdown
+            db.commit()
+            db.refresh(updated_ts)
+
+        final_score = float(updated_ts.final_score) if updated_ts and updated_ts.final_score is not None else None
+        is_flagged = updated_ts.flagged if updated_ts else False
+
+        status_str = "escalated" if action == "escalate" else "resolved"
+        message_str = f"Item {item.id} {action}ed successfully"
+        if item.gold_label and action in {"confirm", "correct"}:
+            message_str += f" with gold label '{item.gold_label}'"
+
+        return ReviewResolveResponse(
+            success=True,
+            item_id=item.id,
+            status=status_str,
+            action=action,
+            gold_label=item.gold_label,
+            trust_score=final_score,
+            flagged=is_flagged,
+            message=message_str,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to resolve review item: {str(exc)}",
+        )
+

@@ -104,6 +104,13 @@ class Item(Base):
         cascade="all, delete-orphan",
     )
 
+    reviewer_decisions = relationship(
+        "ReviewerDecision",
+        back_populates="item",
+        cascade="all, delete-orphan",
+    )
+
+
     def __repr__(self) -> str:
         return (
             f"<Item("

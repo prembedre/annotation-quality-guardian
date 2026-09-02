@@ -113,6 +113,12 @@ class Annotation(Base):
         back_populates="annotations",
     )
 
+    reviewer_decisions = relationship(
+        "ReviewerDecision",
+        back_populates="annotation",
+        cascade="all, delete-orphan",
+    )
+
     __table_args__ = (
         Index(
             "ix_item_annotator",
@@ -120,7 +126,24 @@ class Annotation(Base):
             "annotator_id",
             unique=True,
         ),
+        Index(
+            "idx_annotations_proj_annot_created",
+            "project_id",
+            "annotator_id",
+            "created_at",
+        ),
+        Index(
+            "idx_annotations_proj_label",
+            "project_id",
+            "label",
+        ),
+        Index(
+            "idx_annotations_item_label",
+            "item_id",
+            "label",
+        ),
     )
+
 
     def __repr__(self) -> str:
         return (

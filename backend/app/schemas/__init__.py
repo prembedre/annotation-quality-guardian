@@ -33,6 +33,20 @@ from app.schemas.embedding import (
     EmbeddingResultCreate,
     EmbeddingResultResponse,
 )
+from app.schemas.webhook import (
+    WebhookAnnotationPayload,
+    WebhookAnnotationResponse,
+)
+from app.schemas.dashboard import (
+    AnnotatorLeaderboardItem,
+    DashboardLeaderboardResponse,
+    AgreementHeatmapCell,
+    DashboardAgreementHeatmapResponse,
+)
+from app.schemas.project_settings import (
+    ProjectSettingsSchema,
+    ProjectSettingsUpdateSchema,
+)
 from app.schemas.jobs import (
     BehavioralJobRequest,
     EmbeddingJobRequest,
@@ -58,8 +72,17 @@ __all__ = [
     "BehavioralScoreResponse",
     "EmbeddingResultCreate",
     "EmbeddingResultResponse",
+    "WebhookAnnotationPayload",
+    "WebhookAnnotationResponse",
+    "AnnotatorLeaderboardItem",
+    "DashboardLeaderboardResponse",
+    "AgreementHeatmapCell",
+    "DashboardAgreementHeatmapResponse",
+    "ProjectSettingsSchema",
+    "ProjectSettingsUpdateSchema",
     "BehavioralJobRequest",
     "EmbeddingJobRequest",
     "TrustScoreJobRequest",
     "JobStatusResponse",
 ]
+

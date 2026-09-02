@@ -87,5 +87,19 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
 
+    threshold = relationship(
+        "ProjectThreshold",
+        back_populates="project",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    reviewer_decisions = relationship(
+        "ReviewerDecision",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+
     def __repr__(self) -> str:
         return f"<Project(id={self.id}, name='{self.name}')>"
