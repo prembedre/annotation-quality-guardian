@@ -110,6 +110,12 @@ class Item(Base):
         cascade="all, delete-orphan",
     )
 
+    reroute_histories = relationship(
+        "RerouteHistory",
+        back_populates="item",
+        cascade="all, delete-orphan",
+    )
+
 
     def __repr__(self) -> str:
         return (

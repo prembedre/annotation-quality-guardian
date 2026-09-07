@@ -59,6 +59,18 @@ class Annotator(Base):
         back_populates="reviewer",
     )
 
+    rerouted_from_tasks = relationship(
+        "RerouteHistory",
+        foreign_keys="[RerouteHistory.original_annotator_id]",
+        back_populates="original_annotator",
+    )
+
+    rerouted_to_tasks = relationship(
+        "RerouteHistory",
+        foreign_keys="[RerouteHistory.reassigned_annotator_id]",
+        back_populates="reassigned_annotator",
+    )
+
 
     def __init__(self, *args, **kwargs):
         if "name" in kwargs and "username" not in kwargs:

@@ -187,35 +187,24 @@ def validate_and_normalize_record(
     return normalized, []
 
 
-def ingest_file(
+def ingest_records_batch(
     db: Session,
-    file_path: str,
+    records: List[Dict[str, Any]],
     default_project_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Complete CSV/JSON ingestion pipeline.
-
-    Steps:
-    1. Read and parse file
-    2. Check empty file
-    3. Load project cache for label validation
-    4. Validate and normalize each record
-    5. Deduplicate within file batch
-    6. Deduplicate against PostgreSQL database
-    7. Insert items, annotators (auto-create if missing), and annotations
-    8. Commit transaction
+    Ingest a list of raw annotation dictionaries through the validation,
+    normalization, deduplication, and persistence pipeline.
     """
-    records = read_file(file_path)
-
     if not records:
         return {
             "success": False,
-            "message": "The uploaded file contains no records.",
+            "message": "No records provided for ingestion.",
             "total_records": 0,
             "inserted_records": 0,
             "duplicate_records": 0,
             "failed_records": 0,
-            "errors": [{"row": 0, "error": "Empty file"}],
+            "errors": [{"row": 0, "error": "Empty dataset"}],
         }
 
     # Pre-cache project label sets
@@ -261,7 +250,7 @@ def ingest_file(
             skipped_duplicates += 1
             errors.append({
                 "row": row_num,
-                "error": f"Duplicate annotation in uploaded file for item '{normalized['external_id']}' and annotator {normalized['annotator_id']}",
+                "error": f"Duplicate annotation in batch for item '{normalized['external_id']}' and annotator {normalized['annotator_id']}",
             })
             continue
 
@@ -350,3 +339,32 @@ def ingest_file(
         "failed_records": len(errors) - skipped_duplicates,
         "errors": errors,
     }
+
+
+def ingest_file(
+    db: Session,
+    file_path: str,
+    default_project_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Complete CSV/JSON file ingestion pipeline.
+    """
+    records = read_file(file_path)
+
+    if not records:
+        return {
+            "success": False,
+            "message": "The uploaded file contains no records.",
+            "total_records": 0,
+            "inserted_records": 0,
+            "duplicate_records": 0,
+            "failed_records": 0,
+            "errors": [{"row": 0, "error": "Empty file"}],
+        }
+
+    return ingest_records_batch(
+        db=db,
+        records=records,
+        default_project_id=default_project_id,
+    )
+

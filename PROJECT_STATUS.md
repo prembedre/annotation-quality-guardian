@@ -2,50 +2,65 @@
 
 **Repository:** [prembedre/annotation-quality-guardian](https://github.com/prembedre/annotation-quality-guardian)  
 **Branch:** `main`  
-**Current Milestone:** Phase 3 — Dashboard & Integrations  
+**Current Milestone:** Phase 4 — Automation & Database Integrations  
 **Status Date:** September 7, 2026  
-**Overall Phase 3 Status:** 🟡 **Backend & DB 100% Complete | Frontend UI Pending**
+**Overall Status:** 🟢 **Phase 1, 2, 3 Complete (100%) | Phase 4 Backend & Database Complete (100%)**
 
 ---
 
 ## 1. Executive Summary
 
-The **Annotation Quality Guardian (AQG)** platform provides automated quality auditing, trust scoring, and anomaly detection for machine learning data annotations.
+The **Annotation Quality Guardian (AQG)** platform provides automated quality auditing, multi-signal trust scoring, behavioral anomaly detection, inter-annotator agreement matrices, read-only external database integrations, and automated task rerouting for data annotation pipelines.
 
-All **Phase 3 Backend, Database, Scoring, and Integration** objectives have been fully implemented, integrated, and verified:
-- **Annotator Leaderboard Service & API:** Calculates rolling accuracy, average trust score, gold accuracy, and throughput per annotator.
-- **Inter-Annotator Agreement Heatmap Service & API:** Pairwise annotator agreement matrix computation and disagreement breakdown.
-- **Real-Time Webhook Ingestion API:** Direct streaming of annotation payloads (`POST /api/webhook/annotations`) with immediate schema validation, persistence, and trust score recalculation.
-- **Configurable Quality Thresholds:** Project-level flagging sensitivity and weight tuning (`GET/PUT /api/projects/{id}/settings`).
-- **Enhanced Reviewer Resolution Workflow:** Granular reviewer decisions (`confirm`, `correct`, `escalate`), ground truth assignment, and dynamic trust score adjustments.
-- **Automated Test Suite:** 63 passing tests across backend, scoring algorithms, and integrations.
+### Status Highlights:
+- **Phase 1 (Core Platform & Ingestion):** 🟢 Complete
+- **Phase 2 (Scoring Engine & Async Tasks):** 🟢 Complete
+- **Phase 3 (Dashboard, Heatmaps & Reviewer Workflow):** 🟢 Complete across Backend, DB, Scoring, and Frontend UI
+- **Phase 4 (Automation, External DB Connectors & Rerouting):** 🟢 Backend & Database 100% Complete
+- **Automated Test Suite:** 74 tests passing (100% success rate)
 
 ```
-Phase 3 Backend, DB & Scoring Completion Tracker:
-████████████████████████████████████████  100% (Backend, DB, Scoring & API Complete)
-Phase 3 Frontend UI Completion Tracker:
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░    0% (UI Components Pending)
+Phase 1–3 Overall Completion:
+████████████████████████████████████████  100% (Core, Scoring, Dashboard & UI)
+Phase 4 Backend & DB Completion:
+████████████████████████████████████████  100% (Connectors, Rerouting & A/B DB)
 ```
 
 ---
 
-## 2. Phase 3 Task Matrix
+## 2. Phase 3 Deliverables Matrix
 
 | # | Task | Deliverable | Backend & DB | Frontend UI | Status |
 |---|---|---|:---:|:---:|:---:|
-| **1** | **Annotator Leaderboard** | Rolling accuracy & trust score ranking per annotator (`GET /api/dashboard/leaderboard`) | 🟢 **Complete** | 🔴 **Pending** | 🟡 In Progress |
-| **2** | **Agreement Heatmap** | Pairwise annotator agreement matrix (`GET /api/dashboard/agreement-heatmap`) | 🟢 **Complete** | 🔴 **Pending** | 🟡 In Progress |
+| **1** | **Annotator Leaderboard** | Rolling accuracy & trust score ranking per annotator (`GET /api/dashboard/leaderboard`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **2** | **Agreement Heatmap** | Pairwise annotator agreement matrix (`GET /api/dashboard/agreement-heatmap`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
 | **3** | **Webhook Live Ingestion** | Real-time external label streaming receiver (`POST /api/webhook/annotations`) | 🟢 **Complete** | ⚪ *N/A (API)* | 🟢 **Complete** |
-| **4** | **Configurable Thresholds** | Admin tuning of flagging sensitivity & signal weights (`GET/PUT /api/projects/{id}/settings`) | 🟢 **Complete** | 🔴 **Pending** | 🟡 In Progress |
-| **5** | **Reviewer Resolve Workflow** | Enhanced `confirm` / `correct` / `escalate` actions (`POST /api/review/{item_id}/resolve`) | 🟢 **Complete** | 🔴 **Pending** | 🟡 In Progress |
+| **4** | **Configurable Thresholds** | Admin tuning of flagging sensitivity & signal weights (`GET/PUT /api/projects/{id}/settings`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **5** | **Reviewer Resolve Workflow** | Enhanced `confirm` / `correct` / `escalate` actions (`POST /api/review/{item_id}/resolve`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
 
 ---
 
-## 3. Module & Architectural Status
+## 3. Phase 4 Deliverables Matrix (Backend & Database)
+
+| # | Task | Deliverable | Backend | Database | Status |
+|---|---|---|:---:|:---:|:---:|
+| **1** | **Read-Only DB Connector** | Configurable external DB connections with strict read-only query guard (`POST/GET/DELETE /api/integrations/connectors`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **2** | **Connection Verification** | Live connection latency and read-only verification test (`POST /api/integrations/connectors/{id}/test`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **3** | **Live DB Ingestion Sync** | Read-only external database sync pipeline into AQG ingestion (`POST /api/integrations/connectors/{id}/sync`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **4** | **Automatic Task Rerouting** | Reassignment queue and audit tracking (`GET /api/rerouting/pending`, `POST /api/rerouting/{item_id}/assign`) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **5** | **A/B Testing Database Support** | Label schema and guideline experiment versions (`ab_test_experiments` table & ORM) | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **6** | **Phase 4 Migrations & Schema** | Alembic migration `0004_phase4...` & PostgreSQL DDL schema with compound indexes | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+| **7** | **Phase 4 Sample Data** | Sample records for connectors, rerouted tasks, and A/B experiments | 🟢 **Complete** | 🟢 **Complete** | 🟢 **Complete** |
+
+---
+
+## 4. Architecture & Data Flow
 
 ```mermaid
 graph TD
-    ExternalTools[External Annotation Tools: Label Studio, CVAT, Prodigy] -->|Real-Time Payload| WebhookAPI[POST /api/webhook/annotations]
+    ExternalDB[(External Labeling DB: Label Studio / CVAT / Postgres)] -->|Read-Only Query / Sync| ConnectorService[external_connector_service.py]
+    ExternalTools[External Annotation Webhooks] -->|POST /api/webhook/annotations| WebhookAPI[Webhook API]
+    
     UI[Frontend: React 18 + Vite] -->|1. Upload Dataset| UploadAPI[POST /api/annotations/upload]
     UI -->|2. Trigger Async Jobs| JobsAPI[POST /api/jobs/behavioral | embedding | trust-score]
     UI -->|3. View Flagged Queue| QueueAPI[GET /api/review/queue]
@@ -53,7 +68,10 @@ graph TD
     UI -->|5. Leaderboard & Heatmap| DashAPI[GET /api/dashboard/leaderboard | agreement-heatmap]
     UI -->|6. Project Settings| SettingsAPI[GET / PUT /api/projects/:id/settings]
     UI -->|7. Export Labeled Data| ExportAPI[GET /api/projects/:id/export]
-    
+    UI -->|8. Manage DB Connectors| ConnectorAPI[POST / GET / DELETE /api/integrations/connectors]
+    UI -->|9. Task Rerouting Queue| RerouteAPI[GET / POST /api/rerouting]
+
+    ConnectorService --> IngestService[ingestion_service.py]
     WebhookAPI --> WebhookService[webhook_service.py]
     WebhookService --> DB[(PostgreSQL Database)]
     WebhookService --> TrustScoreService[trust_score_service.py]
@@ -61,7 +79,7 @@ graph TD
     JobsAPI --> CeleryWorker[Celery Background Workers + Redis]
     CeleryWorker --> TrustScoreService
     
-    UploadAPI --> IngestService[ingestion_service.py]
+    UploadAPI --> IngestService
     IngestService --> DB
     
     DB --> GoldService[gold_standard_service.py]
@@ -70,6 +88,7 @@ graph TD
     DB --> EmbeddingService[embedding_service.py]
     DB --> HeatmapService[heatmap.py]
     DB --> LeaderboardService[leaderboard/service.py]
+    DB --> RerouteService[rerouting_service.py]
     
     GoldService --> TrustScoreService
     KappaService --> TrustScoreService
@@ -82,78 +101,98 @@ graph TD
     DB --> DashAPI
     DB --> SettingsAPI
     DB --> ExportAPI
+    DB --> ConnectorAPI
+    DB --> RerouteAPI
 ```
 
-### 3.1 Backend & Scoring Architecture
-- **Dashboard Service (`backend/app/services/dashboard_service.py` & `scoring/`):** Computes annotator leaderboard rankings and inter-annotator pairwise agreement heatmaps with disagreement analysis.
-- **Webhook Service (`backend/app/services/webhook_service.py`):** Validates incoming payload constraints, checks for duplicate annotations, registers new items/annotators if necessary, and immediately computes the unified Trust Score.
-- **Project Settings Service (`backend/app/services/project_settings_service.py`):** Manages project threshold configurations, ensuring weight balances and fallback defaults.
-- **Reviewer Workflow Service (`backend/app/api/review.py`):** Supports `confirm`, `correct`, and `escalate` actions, records reviewer decisions, updates gold labels, and recalculates trust scores in real time.
+---
 
-### 3.2 Database Layer (`database/` & `backend/migrations/`)
-- Alembic schema migrations up to date:
-  - `0001_initial_schema.py` — Core entities (Project, Item, Annotator, Annotation, TrustScore)
-  - `0002_phase2_scoring.py` — Behavioral and Embedding score tables
-  - `0003_phase3_thresholds_and_reviewer_workflow.py` — `project_thresholds` and `reviewer_decisions` tables
+## 5. Database Models & Schema Status
+
+| Table Name | Model | Purpose | Phase Added |
+|---|---|---|:---:|
+| `projects` | `Project` | Annotation projects with defined label sets | Phase 1 |
+| `annotators` | `Annotator` | Annotator identity & performance links | Phase 1 |
+| `items` | `Item` | Annotation data points (including gold standards) | Phase 1 |
+| `annotations` | `Annotation` | Annotator submissions, confidences & durations | Phase 1 |
+| `quality_scores` | `QualityScore` | General quality metrics | Phase 1 |
+| `behavioral_scores` | `BehavioralScore` | Timing, streak, and anomaly scores | Phase 2 |
+| `embedding_results` | `EmbeddingResult` | Vector embedding outlier detection | Phase 2 |
+| `trust_scores` | `TrustScore` | Multi-signal weighted quality score & flags | Phase 2 |
+| `project_thresholds` | `ProjectThreshold` | Configurable per-project quality thresholds | Phase 3 |
+| `reviewer_decisions` | `ReviewerDecision` | Reviewer resolution audit log (confirm/correct/escalate) | Phase 3 |
+| `external_db_connectors` | `ExternalDBConnector` | Read-only external database connection configurations | Phase 4 |
+| `reroute_histories` | `RerouteHistory` | Task reassignment logs and trust score snapshots | Phase 4 |
+| `ab_test_experiments` | `ABTestExperiment` | Label schema and guideline A/B testing configurations | Phase 4 |
+
+### Alembic Migrations:
+- `0001_initial_schema.py` — Core entities
+- `0002_phase2_scoring.py` — Behavioral and Embedding score tables
+- `0003_phase3_thresholds_and_reviewer_workflow.py` — Project thresholds and reviewer decisions
+- `0004_phase4_external_connectors_rerouting_ab_testing.py` — Connectors, task rerouting, and A/B testing
 
 ---
 
-## 4. API Endpoints Reference
+## 6. API Endpoints Reference
 
-| Method | Endpoint | Query / Body Params | Description |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/webhook/annotations` | JSON payload (project, item, annotator, label, confidence, etc.) | Real-time live annotation ingestion |
-| `GET` | `/api/dashboard/leaderboard` | `project_id` (optional) | Ranked annotator metrics (trust score, accuracy, volume) |
-| `GET` | `/api/dashboard/agreement-heatmap` | `project_id` (required) | Pairwise inter-annotator agreement matrix & stats |
-| `GET` | `/api/projects/{id}/settings` | `project_id` | Retrieves configurable project scoring thresholds |
-| `PUT` | `/api/projects/{id}/settings` | `{"flag_threshold": 0.65, "gold_weight": 0.35, ...}` | Updates project scoring thresholds and weights |
-| `POST` | `/api/review/{item_id}/resolve` | `{"action": "confirm"\|"correct"\|"escalate", "correct_label": "...", "notes": "..."}` | Resolves review queue item and recalculates trust score |
-| `GET` | `/api/review/queue` | `project_id`, `flagged`, `min_score`, `max_score`, `page`, `page_size` | Returns paginated items requiring human review |
-| `POST` | `/api/annotations/upload` | Multipart: `file`, `project_id` | Ingests CSV or JSON annotation datasets |
-| `GET` | `/api/annotations/` | `project_id`, `annotator_id`, `limit`, `offset` | Lists individual annotations |
-| `POST` | `/api/jobs/behavioral` | `{"project_id": 1, ...}` | Submits background behavioral anomaly score record job |
-| `POST` | `/api/jobs/embedding` | `{"project_id": 1, ...}` | Submits background embedding outlier analysis job |
-| `POST` | `/api/jobs/trust-score` | `{"project_id": 1, ...}` | Submits background unified trust score computation job |
-| `GET` | `/api/jobs/{job_id}` | None | Retrieves status and payload of any background job |
-| `GET` | `/api/projects/{id}/export` | `format=csv` or `format=json` | Exports full project dataset with quality scores |
-| `GET` | `/api/projects/` | `limit`, `offset` | Lists all projects |
-| `POST` | `/api/projects/` | `{"name": "...", "label_set": [...]}` | Creates a new annotation project |
-| `GET` | `/api/scores/` | `project_id` | Fetches project-level gold accuracy & Kappa scores |
-| `GET` | `/health` | None | Health check & database connection ping |
+| Method | Endpoint | Query / Body Params | Description | Phase |
+| :--- | :--- | :--- | :--- | :---: |
+| `POST` | `/api/integrations/connectors` | JSON (name, type, host, port, db, credentials, query_config) | Registers read-only external database connector | Phase 4 |
+| `GET` | `/api/integrations/connectors` | `status` (optional) | Lists registered connectors (credentials omitted) | Phase 4 |
+| `POST` | `/api/integrations/connectors/{id}/test` | None | Tests database latency & verifies read-only access | Phase 4 |
+| `DELETE` | `/api/integrations/connectors/{id}` | None | Deletes a connector configuration | Phase 4 |
+| `POST` | `/api/integrations/connectors/{id}/sync` | JSON (`project_id`, `table_name`, `limit`) | Ingests annotations directly from external DB (read-only) | Phase 4 |
+| `GET` | `/api/rerouting/pending` | `project_id` (optional) | Retrieves pending items flagged for task rerouting | Phase 4 |
+| `POST` | `/api/rerouting/{item_id}/assign` | JSON (`reassigned_annotator_id`, `reason`) | Reassigns task to annotator and logs reroute history | Phase 4 |
+| `POST` | `/api/webhook/annotations` | JSON payload (project, item, annotator, label, confidence, etc.) | Real-time live annotation ingestion | Phase 3 |
+| `GET` | `/api/dashboard/leaderboard` | `project_id` (optional) | Ranked annotator metrics (trust score, accuracy, volume) | Phase 3 |
+| `GET` | `/api/dashboard/agreement-heatmap` | `project_id` (required) | Pairwise inter-annotator agreement matrix & stats | Phase 3 |
+| `GET` | `/api/projects/{id}/settings` | None | Retrieves configurable project scoring thresholds | Phase 3 |
+| `PUT` | `/api/projects/{id}/settings` | JSON (`gold_threshold`, `kappa_threshold`, etc.) | Updates project scoring thresholds | Phase 3 |
+| `POST` | `/api/review/{item_id}/resolve` | JSON (`action`, `correct_label`, `notes`) | Resolves review queue item and recalculates trust score | Phase 3 |
+| `GET` | `/api/review/queue` | `project_id`, `flagged`, `min_score`, `max_score`, `page`, `page_size` | Returns paginated items requiring human review | Phase 1/2 |
+| `POST` | `/api/annotations/upload` | Multipart: `file`, `project_id` | Ingests CSV or JSON annotation datasets | Phase 1 |
+| `GET` | `/api/annotations/` | `project_id`, `annotator_id`, `limit`, `offset` | Lists individual annotations | Phase 1 |
+| `POST` | `/api/jobs/behavioral` | `{"project_id": 1, ...}` | Submits background behavioral anomaly score record job | Phase 2 |
+| `POST` | `/api/jobs/embedding` | `{"project_id": 1, ...}` | Submits background embedding outlier analysis job | Phase 2 |
+| `POST` | `/api/jobs/trust-score` | `{"project_id": 1, ...}` | Submits background unified trust score computation job | Phase 2 |
+| `GET` | `/api/jobs/{job_id}` | None | Retrieves status and payload of any background job | Phase 2 |
+| `GET` | `/api/projects/{id}/export` | `format=csv` or `format=json` | Exports full project dataset with quality scores | Phase 1/2 |
+| `GET` | `/api/projects/` | `limit`, `offset` | Lists all projects | Phase 1 |
+| `POST` | `/api/projects/` | `{"name": "...", "label_set": [...]}` | Creates a new annotation project | Phase 1 |
+| `GET` | `/api/scores/` | `project_id` | Fetches project-level gold accuracy & Kappa scores | Phase 1 |
+| `GET` | `/health` | None | Health check & database connection ping | Phase 1 |
 
 ---
 
-## 5. Test Suite Verification
+## 7. Test Suite Verification
 
-All **63 test cases** pass with zero errors:
+All **74 automated tests** across all phases pass with 100% success rate:
 
 ```text
-tests\backend\test_behavior_service.py ..                                [  3%]
-tests\backend\test_celery.py .....                                       [ 11%]
-tests\backend\test_embedding_service.py .                                [ 12%]
-tests\backend\test_export.py ....                                        [ 19%]
-tests\backend\test_health.py ..                                          [ 22%]
-tests\backend\test_ingestion.py .....                                    [ 30%]
-tests\backend\test_jobs_api.py ....                                      [ 36%]
-tests\backend\test_models.py .......                                     [ 47%]
-tests\backend\test_phase3_database.py .....                              [ 55%]
-tests\backend\test_phase3_integration.py ...............                 [ 79%]
-tests\backend\test_review_queue.py ...                                   [ 84%]
-tests\backend\test_trust_score_service.py .....                          [ 92%]
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\Downloads\annotation-quality-guardian
+configfile: pytest.ini
+plugins: anyio-4.14.2, asyncio-1.4.0
+collected 74 items
+
+tests\backend\test_behavior_service.py ..                                [  2%]
+tests\backend\test_celery.py .....                                       [  9%]
+tests\backend\test_embedding_service.py .                                [ 10%]
+tests\backend\test_export.py ....                                        [ 16%]
+tests\backend\test_health.py ..                                          [ 18%]
+tests\backend\test_ingestion.py .....                                    [ 25%]
+tests\backend\test_jobs_api.py ....                                      [ 31%]
+tests\backend\test_models.py .......                                     [ 40%]
+tests\backend\test_phase3_database.py .....                              [ 47%]
+tests\backend\test_phase3_integration.py ...............                 [ 67%]
+tests\backend\test_phase4_database.py .....                              [ 74%]
+tests\backend\test_phase4_integration.py ......                          [ 82%]
+tests\backend\test_review_queue.py ...                                   [ 86%]
+tests\backend\test_trust_score_service.py .....                          [ 93%]
 tests\scoring\test_heatmap.py ..                                         [ 95%]
 tests\scoring\test_leaderboard.py ...                                    [100%]
 
-====================== 63 passed in 5.55s =======================
+====================== 74 passed in 3.22s =======================
 ```
-
----
-
-## 6. Next Steps & Pending Work
-
-- **Frontend Dashboard Components:**
-  - Build Annotator Leaderboard UI table in `frontend/src/pages/Dashboard.jsx`.
-  - Build Inter-Annotator Agreement Heatmap visual component.
-- **Frontend Review Queue Workflow:**
-  - Add interactive resolution modal/buttons (`Confirm`, `Correct`, `Escalate`) in `frontend/src/components/ReviewQueueTable.jsx`.
-- **Frontend Project Settings:**
-  - Add Thresholds & Weight Configuration UI in `frontend/src/pages/Projects.jsx`.

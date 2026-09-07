@@ -223,3 +223,112 @@ INSERT INTO reviewer_decisions (
         'Escalated to lead annotator due to split vote across annotators.'
     );
 
+-- ============================================================
+-- Phase 4 Sample Data
+-- ============================================================
+
+-- 1. Read-Only External DB Connectors (2 connectors)
+INSERT INTO external_db_connectors (
+    connection_name,
+    database_type,
+    host,
+    port,
+    database_name,
+    username,
+    password_encrypted,
+    status,
+    read_only,
+    query_config
+) VALUES
+    (
+        'label_studio_replica',
+        'postgresql',
+        'ls-db.internal.example.com',
+        5432,
+        'label_studio_prod_replica',
+        'aqg_readonly_user',
+        'WVdGblpYSnZiR1Y1',
+        'active',
+        TRUE,
+        '{"table_name": "task_completion", "column_mapping": {"external_id": "task_id", "annotator_id": "user_id", "label": "result_label", "confidence": "lead_confidence"}}'
+    ),
+    (
+        'cvat_archive_readonly',
+        'postgresql',
+        'cvat-db.internal.example.com',
+        5432,
+        'cvat_annotations_archive',
+        'aqg_reader',
+        'WVdGblpYSnZiR1Y1',
+        'active',
+        TRUE,
+        '{"table_name": "labeled_shapes", "column_mapping": {"external_id": "frame_id", "annotator_id": "owner_id", "label": "tag_name"}}'
+    );
+
+-- 2. Automated Task Rerouting Records (3 records)
+INSERT INTO reroute_histories (
+    item_id,
+    project_id,
+    original_annotator_id,
+    reassigned_annotator_id,
+    reason,
+    trust_score_snapshot,
+    reroute_status
+) VALUES
+    (
+        5,
+        1,
+        2,
+        1,
+        'Low trust score (0.41) triggered automatic reassignment to Alice',
+        0.410000,
+        'ASSIGNED'
+    ),
+    (
+        6,
+        1,
+        5,
+        3,
+        'Disagreement streak in NER project triggered supervisor reroute',
+        0.520000,
+        'ASSIGNED'
+    ),
+    (
+        3,
+        1,
+        2,
+        NULL,
+        'Gold standard mismatch pending annotator reallocation',
+        0.380000,
+        'PENDING'
+    );
+
+-- 3. Label Schema A/B Testing Experiments (2 experiments)
+INSERT INTO ab_test_experiments (
+    experiment_name,
+    project_id,
+    schema_version_a,
+    schema_version_b,
+    annotator_group,
+    assigned_version,
+    status
+) VALUES
+    (
+        'Granular Sentiment Classes Experiment',
+        1,
+        '{"version": "1.0", "labels": ["positive", "negative", "neutral"], "instructions": "Standard 3-class sentiment"}'::jsonb,
+        '{"version": "2.0", "labels": ["strongly_positive", "weakly_positive", "neutral", "weakly_negative", "strongly_negative"], "instructions": "5-point fine-grained sentiment"}'::jsonb,
+        '{"group_a": [1, 2], "group_b": [3, 4, 5]}'::jsonb,
+        'SPLIT_50_50',
+        'active'
+    ),
+    (
+        'NER Entity Boundary Refinement',
+        2,
+        '{"version": "1.0", "labels": ["PER", "ORG", "LOC", "MISC"], "strict_boundaries": true}'::jsonb,
+        '{"version": "1.1", "labels": ["PERSON", "ORGANIZATION", "LOCATION", "MISCELLANEOUS"], "strict_boundaries": false}'::jsonb,
+        '{"group_a": [1, 3], "group_b": [2, 4, 5]}'::jsonb,
+        'SPLIT_50_50',
+        'active'
+    );
+

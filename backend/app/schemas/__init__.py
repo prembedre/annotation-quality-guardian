@@ -53,6 +53,27 @@ from app.schemas.jobs import (
     TrustScoreJobRequest,
     JobStatusResponse,
 )
+from app.schemas.external_connector import (
+    ConnectorCreateSchema,
+    ConnectorUpdateSchema,
+    ConnectorResponseSchema,
+    ConnectorListResponse,
+    ConnectorTestResponseSchema,
+    ConnectorSyncRequestSchema,
+    ConnectorSyncResponseSchema,
+)
+from app.schemas.rerouting import (
+    RerouteItemPendingResponse,
+    ReroutePendingListResponse,
+    RerouteAssignRequest,
+    RerouteAssignResponse,
+    RerouteHistorySchema,
+)
+from app.schemas.ab_testing import (
+    ABTestExperimentCreateSchema,
+    ABTestExperimentResponseSchema,
+    ABTestExperimentListResponse,
+)
 
 __all__ = [
     "AnnotationCreate",
@@ -84,5 +105,19 @@ __all__ = [
     "EmbeddingJobRequest",
     "TrustScoreJobRequest",
     "JobStatusResponse",
+    "ConnectorCreateSchema",
+    "ConnectorUpdateSchema",
+    "ConnectorResponseSchema",
+    "ConnectorListResponse",
+    "ConnectorTestResponseSchema",
+    "ConnectorSyncRequestSchema",
+    "ConnectorSyncResponseSchema",
+    "RerouteItemPendingResponse",
+    "ReroutePendingListResponse",
+    "RerouteAssignRequest",
+    "RerouteAssignResponse",
+    "RerouteHistorySchema",
+    "ABTestExperimentCreateSchema",
+    "ABTestExperimentResponseSchema",
+    "ABTestExperimentListResponse",
 ]
-

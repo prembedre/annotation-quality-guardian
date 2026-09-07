@@ -13,6 +13,9 @@ from app.models.behavioral_score import BehavioralScore
 from app.models.embedding_result import EmbeddingResult
 from app.models.project_threshold import ProjectThreshold
 from app.models.reviewer_decision import ReviewerDecision
+from app.models.external_db_connector import ExternalDBConnector
+from app.models.reroute_history import RerouteHistory
+from app.models.ab_test_experiment import ABTestExperiment
 
 
 __all__ = [
@@ -26,5 +29,7 @@ __all__ = [
     "EmbeddingResult",
     "ProjectThreshold",
     "ReviewerDecision",
+    "ExternalDBConnector",
+    "RerouteHistory",
+    "ABTestExperiment",
 ]
-

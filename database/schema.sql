@@ -212,3 +212,71 @@ CREATE INDEX idx_reviewer_decisions_reviewer
 CREATE INDEX idx_reviewer_decisions_status
     ON reviewer_decisions (review_status);
 
+-- ============================================================
+-- Phase 4 Tables
+-- ============================================================
+
+-- Read-only external database connectors
+CREATE TABLE IF NOT EXISTS external_db_connectors (
+    id                 SERIAL PRIMARY KEY,
+    connection_name    VARCHAR(255) NOT NULL UNIQUE,
+    database_type      VARCHAR(50) NOT NULL DEFAULT 'postgresql',
+    host               VARCHAR(255),
+    port               INT DEFAULT 5432,
+    database_name      VARCHAR(255) NOT NULL,
+    username           VARCHAR(255),
+    password_encrypted VARCHAR(500),
+    status             VARCHAR(50) NOT NULL DEFAULT 'active',
+    read_only          BOOLEAN NOT NULL DEFAULT TRUE,
+    query_config       JSONB NOT NULL DEFAULT '{}',
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Automated task rerouting and annotator reassignment history
+CREATE TABLE IF NOT EXISTS reroute_histories (
+    id                      SERIAL PRIMARY KEY,
+    item_id                 INT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    project_id              INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    original_annotator_id   INT REFERENCES annotators(id) ON DELETE SET NULL,
+    reassigned_annotator_id INT REFERENCES annotators(id) ON DELETE SET NULL,
+    reason                  TEXT,
+    trust_score_snapshot    NUMERIC(10,6),
+    reroute_status          VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Label schema and guideline A/B testing experiments
+CREATE TABLE IF NOT EXISTS ab_test_experiments (
+    id               SERIAL PRIMARY KEY,
+    experiment_name  VARCHAR(255) NOT NULL,
+    project_id       INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    schema_version_a JSONB NOT NULL DEFAULT '{}',
+    schema_version_b JSONB NOT NULL DEFAULT '{}',
+    annotator_group  JSONB DEFAULT '{}',
+    assigned_version VARCHAR(50),
+    status           VARCHAR(50) NOT NULL DEFAULT 'active',
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at     TIMESTAMPTZ
+);
+
+-- Phase 4 Indexes
+CREATE INDEX idx_external_db_connectors_status
+    ON external_db_connectors (status);
+
+CREATE INDEX idx_reroute_histories_item
+    ON reroute_histories (item_id);
+
+CREATE INDEX idx_reroute_histories_project_status
+    ON reroute_histories (project_id, reroute_status);
+
+CREATE INDEX idx_reroute_histories_orig_annotator
+    ON reroute_histories (original_annotator_id);
+
+CREATE INDEX idx_reroute_histories_reassigned_annotator
+    ON reroute_histories (reassigned_annotator_id);
+
+CREATE INDEX idx_ab_test_experiments_project_status
+    ON ab_test_experiments (project_id, status);
+

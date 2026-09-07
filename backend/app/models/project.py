@@ -100,6 +100,18 @@ class Project(Base):
         cascade="all, delete-orphan",
     )
 
+    reroute_histories = relationship(
+        "RerouteHistory",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+    ab_test_experiments = relationship(
+        "ABTestExperiment",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
 
     def __repr__(self) -> str:
         return f"<Project(id={self.id}, name='{self.name}')>"
