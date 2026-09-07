@@ -14,13 +14,10 @@ export function getScoreTierLabel(score) {
   return 'High Risk';
 }
 
-/**
- * ScoreIndicator component displays trust scores
- * with visual indicators based on score tiers
- */
-export function ScoreIndicator({ trustScore }) {
-  // Assuming trustScore is passed as 0-100 percentage.
-  const displayScore = trustScore != null ? Math.round(trustScore) : null;
+export function ScoreIndicator({ trustScore, label = 'Trust Score' }) {
+  const displayScore =
+    trustScore != null ? Math.round(trustScore) : null;
+
   const trustTier = getScoreTier(displayScore);
 
   return (
@@ -29,7 +26,8 @@ export function ScoreIndicator({ trustScore }) {
         <span className={`score-pill ${trustTier}`}>
           {displayScore != null ? displayScore : 'N/A'}
         </span>
-        <div className="score-meta">Trust Score</div>
+
+        <div className="score-meta">{label}</div>
       </div>
     </div>
   );
