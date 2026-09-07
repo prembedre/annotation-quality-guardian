@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../services/api';
 
 const PROJECT_ID = 1;
@@ -10,12 +10,19 @@ const DEFAULT_SETTINGS = {
   embedding_threshold: 80,
 };
 
-function ProjectSettings() {
+function percent(value) {
+  return `${Number(value).toFixed(0)}%`;
+}
+
+export default function ProjectSettings() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [savedSettings, setSavedSettings] = useState(DEFAULT_SETTINGS);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     async function loadSettings() {
@@ -23,17 +30,36 @@ function ProjectSettings() {
         setLoading(true);
         setError('');
 
-        const { data } = await api.get(`/projects/${PROJECT_ID}/settings`);
+        const response = await api.get(
+          `/projects/${PROJECT_ID}/settings`
+        );
 
-        setSettings({
-          gold_threshold: data.gold_threshold,
-          kappa_threshold: data.kappa_threshold,
-          behavior_threshold: data.behavior_threshold,
-          embedding_threshold: data.embedding_threshold,
-        });
+        const loadedSettings = {
+          gold_threshold:
+            response.data.gold_threshold ?? DEFAULT_SETTINGS.gold_threshold,
+
+          kappa_threshold:
+            response.data.kappa_threshold ??
+            DEFAULT_SETTINGS.kappa_threshold,
+
+          behavior_threshold:
+            response.data.behavior_threshold ??
+            DEFAULT_SETTINGS.behavior_threshold,
+
+          embedding_threshold:
+            response.data.embedding_threshold ??
+            DEFAULT_SETTINGS.embedding_threshold,
+        };
+
+        setSettings(loadedSettings);
+        setSavedSettings(loadedSettings);
       } catch (err) {
         console.error('Failed to load project settings:', err);
-        setError('Failed to load project settings.');
+
+        setError(
+          err.response?.data?.detail ||
+            'Failed to load project settings.'
+        );
       } finally {
         setLoading(false);
       }
@@ -42,25 +68,21 @@ function ProjectSettings() {
     loadSettings();
   }, []);
 
-  function handleChange(event) {
-    const { name, value } = event.target;
-
-    setSettings((previous) => ({
-      ...previous,
-      [name]: value,
+  function handleChange(name, value) {
+    setSettings((current) => ({
+      ...current,
+      [name]: Number(value),
     }));
 
-    setSuccess('');
+    setMessage('');
     setError('');
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
+  async function handleSave() {
     try {
       setSaving(true);
+      setMessage('');
       setError('');
-      setSuccess('');
 
       const payload = {
         gold_threshold: Number(settings.gold_threshold),
@@ -69,42 +91,51 @@ function ProjectSettings() {
         embedding_threshold: Number(settings.embedding_threshold),
       };
 
-      const { data } = await api.put(
+      const response = await api.put(
         `/projects/${PROJECT_ID}/settings`,
         payload
       );
 
-      setSettings({
-        gold_threshold: data.gold_threshold,
-        kappa_threshold: data.kappa_threshold,
-        behavior_threshold: data.behavior_threshold,
-        embedding_threshold: data.embedding_threshold,
-      });
+      const updatedSettings = {
+        gold_threshold:
+          response.data.gold_threshold ?? payload.gold_threshold,
 
-      setSuccess('Project settings saved successfully.');
+        kappa_threshold:
+          response.data.kappa_threshold ?? payload.kappa_threshold,
+
+        behavior_threshold:
+          response.data.behavior_threshold ?? payload.behavior_threshold,
+
+        embedding_threshold:
+          response.data.embedding_threshold ?? payload.embedding_threshold,
+      };
+
+      setSettings(updatedSettings);
+      setSavedSettings(updatedSettings);
+
+      setMessage('Project settings saved successfully.');
     } catch (err) {
       console.error('Failed to save project settings:', err);
 
-      const message =
-        err.response?.data?.detail || 'Failed to save project settings.';
-
-      setError(message);
+      setError(
+        err.response?.data?.detail ||
+          'Failed to save project settings.'
+      );
     } finally {
       setSaving(false);
     }
   }
 
   function handleReset() {
-    setSettings(DEFAULT_SETTINGS);
-    setSuccess('');
+    setSettings(savedSettings);
+    setMessage('');
     setError('');
   }
 
   if (loading) {
     return (
-      <div>
-        <h1 className="page-title">Project Settings</h1>
-        <div className="card">
+      <div className="settings-page">
+        <div className="settings-card">
           <p>Loading project settings...</p>
         </div>
       </div>
@@ -112,225 +143,229 @@ function ProjectSettings() {
   }
 
   return (
-    <div>
-      <h1 className="page-title">Project Settings</h1>
+    <div className="settings-page">
+      <div className="settings-header">
+        <div>
+          <h1>Project Settings</h1>
 
-      <div className="card">
-        <h2>Quality Thresholds</h2>
+          <p>
+            Configure the quality thresholds used to identify
+            annotations that need review.
+          </p>
+        </div>
 
-        <p style={{ marginBottom: '24px' }}>
-          Configure the quality thresholds used by the Annotation Quality
-          Guardian for Project {PROJECT_ID}.
-        </p>
+        <div className="settings-project">
+          Project {PROJECT_ID}
+        </div>
+      </div>
 
-        {error && (
-          <div
-            style={{
-              padding: '12px 16px',
-              marginBottom: '20px',
-              borderRadius: '6px',
-              backgroundColor: '#fee2e2',
-              color: '#991b1b',
-            }}
-          >
-            {error}
+      <div className="settings-card">
+        <div className="settings-section-header">
+          <div>
+            <h2>Quality Thresholds</h2>
+
+            <p>
+              Adjust the minimum quality levels for each scoring
+              signal.
+            </p>
           </div>
-        )}
+        </div>
 
-        {success && (
-          <div
-            style={{
-              padding: '12px 16px',
-              marginBottom: '20px',
-              borderRadius: '6px',
-              backgroundColor: '#dcfce7',
-              color: '#166534',
-            }}
-          >
-            {success}
-          </div>
-        )}
+        <div className="settings-controls">
+          {/* Gold Threshold */}
+          <div className="setting-control">
+            <div className="setting-label-row">
+              <div>
+                <label htmlFor="gold-threshold">
+                  Gold Accuracy Threshold
+                </label>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '24px' }}>
-            <label
-              htmlFor="gold_threshold"
-              style={{
-                display: 'block',
-                fontWeight: '600',
-                marginBottom: '8px',
-              }}
-            >
-              Gold Threshold (%)
-            </label>
+                <p>
+                  Minimum acceptable accuracy on gold-standard
+                  annotations.
+                </p>
+              </div>
+
+              <span className="setting-value">
+                {percent(settings.gold_threshold)}
+              </span>
+            </div>
 
             <input
-              id="gold_threshold"
-              name="gold_threshold"
-              type="number"
+              id="gold-threshold"
+              className="threshold-slider"
+              type="range"
               min="0"
               max="100"
               step="1"
               value={settings.gold_threshold}
-              onChange={handleChange}
-              style={{
-                width: '100%',
-                maxWidth: '400px',
-                padding: '10px',
-                border: '1px solid #ccc',
-                borderRadius: '6px',
-              }}
+              onChange={(event) =>
+                handleChange(
+                  'gold_threshold',
+                  event.target.value
+                )
+              }
             />
 
-            <p style={{ marginTop: '6px', color: '#666' }}>
-              Minimum percentage required for gold-label quality.
-            </p>
+            <div className="slider-range">
+              <span>0%</span>
+              <span>100%</span>
+            </div>
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
-            <label
-              htmlFor="kappa_threshold"
-              style={{
-                display: 'block',
-                fontWeight: '600',
-                marginBottom: '8px',
-              }}
-            >
-              Kappa Threshold
-            </label>
+          {/* Kappa Threshold */}
+          <div className="setting-control">
+            <div className="setting-label-row">
+              <div>
+                <label htmlFor="kappa-threshold">
+                  Kappa Threshold
+                </label>
+
+                <p>
+                  Minimum acceptable inter-annotator agreement.
+                </p>
+              </div>
+
+              <span className="setting-value">
+                {Number(settings.kappa_threshold).toFixed(2)}
+              </span>
+            </div>
 
             <input
-              id="kappa_threshold"
-              name="kappa_threshold"
-              type="number"
+              id="kappa-threshold"
+              className="threshold-slider"
+              type="range"
               min="-1"
               max="1"
               step="0.01"
               value={settings.kappa_threshold}
-              onChange={handleChange}
-              style={{
-                width: '100%',
-                maxWidth: '400px',
-                padding: '10px',
-                border: '1px solid #ccc',
-                borderRadius: '6px',
-              }}
+              onChange={(event) =>
+                handleChange(
+                  'kappa_threshold',
+                  event.target.value
+                )
+              }
             />
 
-            <p style={{ marginTop: '6px', color: '#666' }}>
-              Minimum acceptable inter-annotator agreement score.
-            </p>
+            <div className="slider-range">
+              <span>-1.00</span>
+              <span>1.00</span>
+            </div>
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
-            <label
-              htmlFor="behavior_threshold"
-              style={{
-                display: 'block',
-                fontWeight: '600',
-                marginBottom: '8px',
-              }}
-            >
-              Behavioral Threshold (%)
-            </label>
+          {/* Behavioral Threshold */}
+          <div className="setting-control">
+            <div className="setting-label-row">
+              <div>
+                <label htmlFor="behavior-threshold">
+                  Behavioral Threshold
+                </label>
+
+                <p>
+                  Minimum acceptable behavioral quality score.
+                </p>
+              </div>
+
+              <span className="setting-value">
+                {percent(settings.behavior_threshold)}
+              </span>
+            </div>
 
             <input
-              id="behavior_threshold"
-              name="behavior_threshold"
-              type="number"
+              id="behavior-threshold"
+              className="threshold-slider"
+              type="range"
               min="0"
               max="100"
               step="1"
               value={settings.behavior_threshold}
-              onChange={handleChange}
-              style={{
-                width: '100%',
-                maxWidth: '400px',
-                padding: '10px',
-                border: '1px solid #ccc',
-                borderRadius: '6px',
-              }}
+              onChange={(event) =>
+                handleChange(
+                  'behavior_threshold',
+                  event.target.value
+                )
+              }
             />
 
-            <p style={{ marginTop: '6px', color: '#666' }}>
-              Minimum behavioral quality score required for an annotator.
-            </p>
+            <div className="slider-range">
+              <span>0%</span>
+              <span>100%</span>
+            </div>
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
-            <label
-              htmlFor="embedding_threshold"
-              style={{
-                display: 'block',
-                fontWeight: '600',
-                marginBottom: '8px',
-              }}
-            >
-              Embedding Threshold (%)
-            </label>
+          {/* Embedding Threshold */}
+          <div className="setting-control">
+            <div className="setting-label-row">
+              <div>
+                <label htmlFor="embedding-threshold">
+                  Embedding Threshold
+                </label>
+
+                <p>
+                  Minimum acceptable semantic similarity score.
+                </p>
+              </div>
+
+              <span className="setting-value">
+                {percent(settings.embedding_threshold)}
+              </span>
+            </div>
 
             <input
-              id="embedding_threshold"
-              name="embedding_threshold"
-              type="number"
+              id="embedding-threshold"
+              className="threshold-slider"
+              type="range"
               min="0"
               max="100"
               step="1"
               value={settings.embedding_threshold}
-              onChange={handleChange}
-              style={{
-                width: '100%',
-                maxWidth: '400px',
-                padding: '10px',
-                border: '1px solid #ccc',
-                borderRadius: '6px',
-              }}
+              onChange={(event) =>
+                handleChange(
+                  'embedding_threshold',
+                  event.target.value
+                )
+              }
             />
 
-            <p style={{ marginTop: '6px', color: '#666' }}>
-              Minimum embedding-based quality score required.
-            </p>
+            <div className="slider-range">
+              <span>0%</span>
+              <span>100%</span>
+            </div>
           </div>
+        </div>
 
-          <div
-            style={{
-              display: 'flex',
-              gap: '12px',
-              marginTop: '30px',
-            }}
+        {message && (
+          <div className="settings-success">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="settings-error">
+            {error}
+          </div>
+        )}
+
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="settings-reset-button"
+            onClick={handleReset}
+            disabled={saving}
           >
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                padding: '10px 20px',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {saving ? 'Saving...' : 'Save Settings'}
-            </button>
+            Reset
+          </button>
 
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={saving}
-              style={{
-                padding: '10px 20px',
-                border: '1px solid #ccc',
-                borderRadius: '6px',
-                backgroundColor: 'white',
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </form>
+          <button
+            type="button"
+            className="settings-save-button"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-
-export default ProjectSettings;
