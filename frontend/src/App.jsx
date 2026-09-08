@@ -11,6 +11,8 @@ import Projects from './pages/Projects';
 import Scores from './pages/Scores';
 import ReviewQueue from './pages/ReviewQueue';
 import ProjectSettings from './pages/ProjectSettings';
+import Integrations from './pages/Integrations';
+import AutomationDashboard from './pages/AutomationDashboard';
 
 function App() {
   return (
@@ -49,6 +51,18 @@ function App() {
                 Project Settings
               </NavLink>
             </li>
+
+            <li>
+              <NavLink to="/integrations">
+                Integrations
+              </NavLink>
+            </li>
+
+            <li>
+              <NavLink to="/automation">
+                Automation
+              </NavLink>
+            </li>
           </ul>
         </nav>
 
@@ -61,6 +75,14 @@ function App() {
             <Route
               path="/project-settings"
               element={<ProjectSettings />}
+            />
+            <Route
+              path="/integrations"
+              element={<Integrations />}
+            />
+            <Route
+              path="/automation"
+              element={<AutomationDashboard />}
             />
           </Routes>
         </main>
