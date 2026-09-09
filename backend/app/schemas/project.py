@@ -1,26 +1,47 @@
 """
-Pydantic schemas for projects.
+Project schemas.
+
+Provides request and response schemas for annotation projects.
 """
 
-from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class ProjectCreate(BaseModel):
-    """Payload for creating a new project."""
-    name: str = Field(..., min_length=1, max_length=255, description="Project name")
-    description: Optional[str] = Field(None, description="Project description")
-    label_set: List[str] = Field(..., min_length=1, description="Allowed label classes")
+class ProjectBase(BaseModel):
+    """Shared project fields."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Project name",
+    )
+
+    description: Optional[str] = Field(
+        None,
+        description="Project description",
+    )
+
+    label_set: List[str] = Field(
+        default_factory=list,
+        description="List of valid label strings",
+    )
 
 
-class ProjectResponse(BaseModel):
-    """Single project response."""
+class ProjectCreate(ProjectBase):
+    """Schema for creating a project."""
+
+    pass
+
+
+class ProjectResponse(ProjectBase):
+    """Schema returned for a project."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    name: str
-    description: Optional[str] = None
-    label_set: List[str]
     created_at: datetime
     updated_at: Optional[datetime] = None
