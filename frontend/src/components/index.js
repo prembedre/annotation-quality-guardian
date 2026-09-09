@@ -1,5 +1,5 @@
 /**
- * Component exports for easier imports
+ * Component exports
  */
 
 export { ReviewQueueHeader } from './ReviewQueueHeader';
@@ -9,5 +9,7 @@ export { ScoreIndicator, getScoreTier, getScoreTierLabel } from './ScoreIndicato
 export { FlagStatusBadge } from './FlagStatusBadge';
 export { Pagination } from './Pagination';
 export { DatasetExport } from './DatasetExport';
-export { LoadingState, EmptyState, ErrorState } from './States';
+export { LoadingState, EmptyState as StatesEmptyState, ErrorState } from './States';
 export { Toast } from './Toast';
+export { EmptyState } from './EmptyState';
+export { StatCard } from './StatCard';

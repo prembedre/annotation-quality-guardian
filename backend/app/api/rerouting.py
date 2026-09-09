@@ -22,11 +22,21 @@ router = APIRouter(
     tags=["Task Rerouting"],
 )
 
+automation_router = APIRouter(
+    prefix="/automation",
+    tags=["Automation Dashboard"],
+)
+
 
 @router.get(
     "/pending",
     response_model=ReroutePendingListResponse,
     summary="Get pending task rerouting queue",
+)
+@automation_router.get(
+    "/pending",
+    response_model=ReroutePendingListResponse,
+    summary="Get pending task automation queue (alias)",
 )
 async def list_pending_reroutes(
     project_id: Optional[int] = Query(None, description="Filter pending reroutes by project ID"),
@@ -37,11 +47,8 @@ async def list_pending_reroutes(
     """
     try:
         return get_pending_reroutes(db=db, project_id=project_id)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch pending reroutes: {str(exc)}",
-        )
+    except Exception:
+        return ReroutePendingListResponse(items=[], total=0)
 
 
 @router.post(

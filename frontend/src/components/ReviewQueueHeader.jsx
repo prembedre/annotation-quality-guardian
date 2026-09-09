@@ -1,16 +1,17 @@
 import React from 'react';
 
 /**
- * ReviewQueueHeader component displays the page title and description
+ * ReviewQueueHeader component displays the title and subtitle
  */
 export function ReviewQueueHeader() {
   return (
-    <div className="topbar">
-      <div>
-        <p className="eyebrow">Data Quality Guardian</p>
-        <h1>Review Queue</h1>
-        <p className="subtitle">Review flagged annotations and resolve quality issues.</p>
-      </div>
+    <div>
+      <h1 className="page-title">Review Queue</h1>
+      <p className="page-subtitle">
+        Review flagged annotations, investigate quality anomalies, and submit reviewer resolutions.
+      </p>
     </div>
   );
 }
+
+export default ReviewQueueHeader;

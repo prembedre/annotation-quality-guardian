@@ -29,7 +29,11 @@ def get_annotator_leaderboard(
     if project_id is not None:
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
-            raise ValueError(f"Project with ID {project_id} not found.")
+            return {
+                "project_id": project_id,
+                "total_annotators": 0,
+                "leaderboard": [],
+            }
 
     # Base query for annotations
     query = db.query(Annotation)
@@ -58,7 +62,7 @@ def get_annotator_leaderboard(
 
     for ann_id, ann_list in annotator_annotations.items():
         annotator = annotator_map.get(ann_id)
-        name = annotator.username if annotator else f"Annotator_{ann_id}"
+        name = (getattr(annotator, 'display_name', None) or getattr(annotator, 'username', None) or getattr(annotator, 'name', None)) if annotator else f"Annotator_{ann_id}"
 
         total_count = len(ann_list)
         confidences = [a.confidence for a in ann_list if a.confidence is not None]
@@ -125,12 +129,22 @@ def get_agreement_heatmap(
     """
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
-        raise ValueError(f"Project with ID {project_id} not found.")
+        return {
+            "project_id": project_id,
+            "annotators": [],
+            "annotator_ids": [],
+            "matrix": [],
+            "cells": [],
+            "overall_kappa": None,
+        }
 
     # Fetch annotations for project
     annotations = db.query(Annotation).filter(Annotation.project_id == project_id).all()
     annotators_db = db.query(Annotator).all()
-    annotator_names = {a.id: a.username for a in annotators_db}
+    annotator_names = {
+        a.id: (getattr(a, 'display_name', None) or getattr(a, 'username', None) or getattr(a, 'name', None) or f"Annotator_{a.id}")
+        for a in annotators_db
+    }
 
     # Distinct annotators who participated in this project
     project_ann_ids = sorted(list({a.annotator_id for a in annotations}))

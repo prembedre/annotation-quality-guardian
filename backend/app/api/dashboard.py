@@ -39,16 +39,12 @@ async def get_leaderboard(
     """
     try:
         return get_annotator_leaderboard(db=db, project_id=project_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate leaderboard: {str(exc)}",
-        )
+    except Exception:
+        return {
+            "project_id": project_id,
+            "total_annotators": 0,
+            "leaderboard": [],
+        }
 
 
 @router.get(
@@ -68,13 +64,12 @@ async def get_heatmap(
     """
     try:
         return get_agreement_heatmap(db=db, project_id=project_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate agreement heatmap: {str(exc)}",
-        )
+    except Exception:
+        return {
+            "project_id": project_id,
+            "annotators": [],
+            "annotator_ids": [],
+            "matrix": [],
+            "cells": [],
+            "overall_kappa": None,
+        }

@@ -38,6 +38,13 @@ class ProjectSettingsSchema(BaseModel):
         description="Minimum behavioral score percentage threshold (0-100)",
     )
 
+    behavioral_threshold: Optional[float] = Field(
+        default=75.0,
+        ge=0.0,
+        le=100.0,
+        description="Alias for behavior_threshold",
+    )
+
     embedding_threshold: float = Field(
         default=80.0,
         ge=0.0,
@@ -46,7 +53,7 @@ class ProjectSettingsSchema(BaseModel):
     )
 
     automation_enabled: bool = Field(
-        default=True,
+        default=False,
         description="Whether Phase 4 automation is enabled for this project",
     )
 
@@ -67,6 +74,12 @@ class ProjectSettingsUpdateSchema(BaseModel):
     )
 
     behavior_threshold: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=100.0,
+    )
+
+    behavioral_threshold: Optional[float] = Field(
         None,
         ge=0.0,
         le=100.0,

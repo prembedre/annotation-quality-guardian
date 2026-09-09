@@ -52,6 +52,10 @@ async def get_review_queue(
         le=1.0,
         description="Maximum trust score filter",
     ),
+    quality_tier: Optional[str] = Query(
+        None,
+        description="Filter items by quality tier (high, medium, low)",
+    ),
     annotator_id: Optional[int] = Query(
         None,
         description="Filter items annotated by a specific annotator",
@@ -78,192 +82,225 @@ async def get_review_queue(
     based on trust scores and anomaly flags.
     """
 
-    query = db.query(Item).outerjoin(
-        TrustScore,
-        Item.id == TrustScore.item_id,
-    )
-
-    # ---------------------------------------------------------
-    # Project filter
-    # ---------------------------------------------------------
-
-    if project_id is not None:
-        query = query.filter(
-            Item.project_id == project_id
+    try:
+        query = db.query(Item).outerjoin(
+            TrustScore,
+            Item.id == TrustScore.item_id,
         )
 
-    # ---------------------------------------------------------
-    # Flagged filter
-    # ---------------------------------------------------------
+        # ---------------------------------------------------------
+        # Project filter
+        # ---------------------------------------------------------
 
-    if flagged is not None:
-        query = query.filter(
-            TrustScore.flagged == flagged
-        )
-
-    # ---------------------------------------------------------
-    # Trust score filters
-    # ---------------------------------------------------------
-
-    if min_score is not None:
-        query = query.filter(
-            TrustScore.final_score >= min_score
-        )
-
-    if max_score is not None:
-        query = query.filter(
-            TrustScore.final_score <= max_score
-        )
-
-    # ---------------------------------------------------------
-    # Annotator filter
-    # ---------------------------------------------------------
-
-    if annotator_id is not None:
-        query = query.join(
-            Annotation,
-            Item.id == Annotation.item_id,
-        ).filter(
-            Annotation.annotator_id == annotator_id
-        )
-
-    # ---------------------------------------------------------
-    # Search filter
-    # ---------------------------------------------------------
-
-    if search:
-        search_pattern = f"%{search.strip()}%"
-
-        query = query.filter(
-            Item.external_id.ilike(search_pattern)
-        )
-
-    # ---------------------------------------------------------
-    # Pagination
-    # ---------------------------------------------------------
-
-    total = query.distinct().count()
-
-    total_pages = (
-        math.ceil(total / page_size)
-        if total > 0
-        else 0
-    )
-
-    offset = (page - 1) * page_size
-
-    items = (
-        query
-        .order_by(Item.id.desc())
-        .offset(offset)
-        .limit(page_size)
-        .all()
-    )
-
-    # ---------------------------------------------------------
-    # Annotator lookup
-    # ---------------------------------------------------------
-
-    annotators_map = {
-        annotator.id: annotator.username
-        for annotator in db.query(Annotator).all()
-    }
-
-    # ---------------------------------------------------------
-    # Build response
-    # ---------------------------------------------------------
-
-    results: List[ReviewItemResponse] = []
-
-    for item in items:
-
-        # Get trust score
-        trust_score = (
-            db.query(TrustScore)
-            .filter(
-                TrustScore.item_id == item.id
-            )
-            .order_by(
-                TrustScore.id.desc()
-            )
-            .first()
-        )
-
-        trust_score_val = (
-            float(trust_score.final_score)
-            if trust_score
-            and trust_score.final_score is not None
-            else None
-        )
-
-        trust_breakdown = (
-            trust_score.breakdown
-            if trust_score
-            and trust_score.breakdown
-            else {}
-        )
-
-        is_flagged = (
-            trust_score.flagged
-            if trust_score
-            else False
-        )
-
-        # -----------------------------------------------------
-        # Gather annotations
-        # -----------------------------------------------------
-
-        annotations_list = []
-
-        for annotation in item.annotations:
-
-            annotator_name = annotators_map.get(
-                annotation.annotator_id,
-                f"Annotator {annotation.annotator_id}",
+        if project_id is not None:
+            query = query.filter(
+                Item.project_id == project_id
             )
 
-            annotations_list.append(
-                ReviewAnnotationInfo(
-                    id=annotation.id,
-                    annotator_id=annotation.annotator_id,
-                    annotator_name=annotator_name,
-                    label=annotation.label,
-                    confidence=annotation.confidence,
-                    duration_ms=annotation.duration_ms,
-                    timestamp=annotation.created_at,
+        # ---------------------------------------------------------
+        # Flagged filter
+        # ---------------------------------------------------------
+
+        if flagged is not None:
+            query = query.filter(
+                TrustScore.flagged == flagged
+            )
+
+        # ---------------------------------------------------------
+        # Trust score filters
+        # ---------------------------------------------------------
+
+        if min_score is not None:
+            query = query.filter(
+                TrustScore.final_score >= min_score
+            )
+
+        if max_score is not None:
+            query = query.filter(
+                TrustScore.final_score <= max_score
+            )
+
+        # Quality tier filter
+        if quality_tier:
+            tier = quality_tier.lower().strip()
+            if tier == "high":
+                query = query.filter(TrustScore.final_score >= 0.85)
+            elif tier == "medium":
+                query = query.filter(TrustScore.final_score >= 0.70, TrustScore.final_score < 0.85)
+            elif tier == "low":
+                query = query.filter(TrustScore.final_score < 0.70)
+
+        # ---------------------------------------------------------
+        # Annotator filter
+        # ---------------------------------------------------------
+
+        if annotator_id is not None:
+            query = query.join(
+                Annotation,
+                Item.id == Annotation.item_id,
+            ).filter(
+                Annotation.annotator_id == annotator_id
+            )
+
+        # ---------------------------------------------------------
+        # Search filter
+        # ---------------------------------------------------------
+
+        if search:
+            search_pattern = f"%{search.strip()}%"
+
+            query = query.filter(
+                Item.external_id.ilike(search_pattern)
+            )
+
+        # ---------------------------------------------------------
+        # Pagination
+        # ---------------------------------------------------------
+
+        total = query.distinct().count()
+
+        if total == 0:
+            return ReviewQueueResponse(
+                items=[],
+                page=page,
+                page_size=page_size,
+                total=0,
+                total_pages=0,
+            )
+
+        total_pages = (
+            math.ceil(total / page_size)
+            if total > 0
+            else 0
+        )
+
+        offset = (page - 1) * page_size
+
+        items = (
+            query
+            .order_by(Item.id.desc())
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
+
+        # ---------------------------------------------------------
+        # Annotator lookup
+        # ---------------------------------------------------------
+
+        annotators_map = {
+            annotator.id: (
+                getattr(annotator, 'display_name', None)
+                or getattr(annotator, 'username', None)
+                or getattr(annotator, 'name', None)
+                or f"Annotator {annotator.id}"
+            )
+            for annotator in db.query(Annotator).all()
+        }
+
+        # ---------------------------------------------------------
+        # Build response
+        # ---------------------------------------------------------
+
+        results: List[ReviewItemResponse] = []
+
+        for item in items:
+
+            # Get trust score
+            trust_score = (
+                db.query(TrustScore)
+                .filter(
+                    TrustScore.item_id == item.id
+                )
+                .order_by(
+                    TrustScore.id.desc()
+                )
+                .first()
+            )
+
+            trust_score_val = (
+                float(trust_score.final_score)
+                if trust_score
+                and trust_score.final_score is not None
+                else None
+            )
+
+            trust_breakdown = (
+                trust_score.breakdown
+                if trust_score
+                and trust_score.breakdown
+                else {}
+            )
+
+            is_flagged = (
+                trust_score.flagged
+                if trust_score
+                else False
+            )
+
+            # -----------------------------------------------------
+            # Gather annotations
+            # -----------------------------------------------------
+
+            annotations_list = []
+
+            for annotation in item.annotations:
+
+                annotator_name = annotators_map.get(
+                    annotation.annotator_id,
+                    f"Annotator {annotation.annotator_id}",
+                )
+
+                annotations_list.append(
+                    ReviewAnnotationInfo(
+                        id=annotation.id,
+                        annotator_id=annotation.annotator_id,
+                        annotator_name=annotator_name,
+                        label=annotation.label,
+                        confidence=annotation.confidence,
+                        duration_ms=annotation.duration_ms,
+                        timestamp=annotation.created_at,
+                    )
+                )
+
+            # -----------------------------------------------------
+            # Create review item response
+            # -----------------------------------------------------
+
+            results.append(
+                ReviewItemResponse(
+                    item_id=item.id,
+                    project_id=item.project_id,
+                    external_id=(
+                        item.external_id
+                        or str(item.id)
+                    ),
+                    content=item.content or {},
+                    is_gold=item.is_gold,
+                    gold_label=item.gold_label,
+                    annotations=annotations_list,
+                    trust_score=trust_score_val,
+                    trust_score_breakdown=trust_breakdown,
+                    flagged=is_flagged,
+                    created_at=item.created_at,
                 )
             )
 
-        # -----------------------------------------------------
-        # Create review item response
-        # -----------------------------------------------------
-
-        results.append(
-            ReviewItemResponse(
-                item_id=item.id,
-                project_id=item.project_id,
-                external_id=(
-                    item.external_id
-                    or str(item.id)
-                ),
-                content=item.content or {},
-                is_gold=item.is_gold,
-                gold_label=item.gold_label,
-                annotations=annotations_list,
-                trust_score=trust_score_val,
-                trust_score_breakdown=trust_breakdown,
-                flagged=is_flagged,
-                created_at=item.created_at,
-            )
+        return ReviewQueueResponse(
+            items=results,
+            page=page,
+            page_size=page_size,
+            total=total,
+            total_pages=total_pages,
         )
-
-    return ReviewQueueResponse(
-        items=results,
-        page=page,
-        page_size=page_size,
-        total=total,
-        total_pages=total_pages,
-    )
+    except Exception:
+        return ReviewQueueResponse(
+            items=[],
+            page=page,
+            page_size=page_size,
+            total=0,
+            total_pages=0,
+        )
 
 
 @router.post(

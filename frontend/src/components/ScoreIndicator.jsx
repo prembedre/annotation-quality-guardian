@@ -15,20 +15,34 @@ export function getScoreTierLabel(score) {
 }
 
 export function ScoreIndicator({ trustScore, label = 'Trust Score' }) {
-  const displayScore =
-    trustScore != null ? Math.round(trustScore) : null;
+  if (trustScore == null) {
+    return <span className="na-cell">—</span>;
+  }
 
+  const displayScore = Math.round(trustScore);
   const trustTier = getScoreTier(displayScore);
 
   return (
-    <div className="score-group">
-      <div>
-        <span className={`score-pill ${trustTier}`}>
-          {displayScore != null ? displayScore : 'N/A'}
+    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '2px' }}>
+      <span className={`score-pill ${trustTier}`}>
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: 'currentColor',
+            display: 'inline-block',
+          }}
+        />
+        <span className="mono-cell">{displayScore}%</span>
+      </span>
+      {label && label !== 'Trust Score' && (
+        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+          {label}
         </span>
-
-        <div className="score-meta">{label}</div>
-      </div>
+      )}
     </div>
   );
 }
+
+export default ScoreIndicator;

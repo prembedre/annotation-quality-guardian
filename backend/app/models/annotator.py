@@ -23,9 +23,15 @@ class Annotator(Base):
         index=True,
     )
 
+    _name = Column(
+        "name",
+        String(255),
+        nullable=True,
+    )
+
     username = Column(
         String(100),
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
     )
@@ -71,20 +77,29 @@ class Annotator(Base):
         back_populates="reassigned_annotator",
     )
 
-
     def __init__(self, *args, **kwargs):
         if "name" in kwargs and "username" not in kwargs:
-            kwargs["username"] = kwargs.pop("name")
+            kwargs["username"] = kwargs["name"]
+            kwargs["_name"] = kwargs["name"]
+        elif "username" in kwargs and "name" not in kwargs:
+            kwargs["_name"] = kwargs["username"]
+        elif "_name" in kwargs and "username" not in kwargs:
+            kwargs["username"] = kwargs["_name"]
         super().__init__(*args, **kwargs)
 
     @property
     def name(self) -> str:
         """Alias for username to preserve backwards compatibility."""
-        return self.username
+        return self.username or self._name or ""
 
     @name.setter
     def name(self, value: str):
+        self._name = value
         self.username = value
 
+    @property
+    def display_name(self) -> str:
+        return self.username or self._name or (f"Annotator_{self.id}" if self.id else "Annotator")
+
     def __repr__(self) -> str:
-        return f"<Annotator(id={self.id}, username='{self.username}')>"
+        return f"<Annotator(id={self.id}, username='{self.name}')>"

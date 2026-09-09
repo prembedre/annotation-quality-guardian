@@ -36,6 +36,18 @@ def _get_project(
     )
 
     if project is None:
+        if project_id == 1:
+            project = Project(
+                id=1,
+                name="Project 1",
+                description="AQG Demo Project",
+                label_set=["positive", "negative", "neutral"],
+                automation_enabled=False,
+            )
+            db.add(project)
+            db.commit()
+            db.refresh(project)
+            return project
         raise ValueError(
             f"Project with ID {project_id} not found."
         )
@@ -101,6 +113,7 @@ def get_project_settings(
         "gold_threshold": float(thresholds.gold_threshold) * 100.0,
         "kappa_threshold": float(thresholds.kappa_threshold),
         "behavior_threshold": float(thresholds.behavioral_threshold) * 100.0,
+        "behavioral_threshold": float(thresholds.behavioral_threshold) * 100.0,
         "embedding_threshold": float(thresholds.embedding_threshold) * 100.0,
         "automation_enabled": bool(
             project.automation_enabled
@@ -127,22 +140,21 @@ def update_project_settings(
         project_id=project_id,
     )
 
-    if "gold_threshold" in updates:
+    if "gold_threshold" in updates and updates["gold_threshold"] is not None:
         thresholds.gold_threshold = float(
             updates["gold_threshold"]
         ) / 100.0
 
-    if "kappa_threshold" in updates:
+    if "kappa_threshold" in updates and updates["kappa_threshold"] is not None:
         thresholds.kappa_threshold = float(
             updates["kappa_threshold"]
         )
 
-    if "behavior_threshold" in updates:
-        thresholds.behavioral_threshold = float(
-            updates["behavior_threshold"]
-        ) / 100.0
+    behavior_val = updates.get("behavioral_threshold") if updates.get("behavioral_threshold") is not None else updates.get("behavior_threshold")
+    if behavior_val is not None:
+        thresholds.behavioral_threshold = float(behavior_val) / 100.0
 
-    if "embedding_threshold" in updates:
+    if "embedding_threshold" in updates and updates["embedding_threshold"] is not None:
         thresholds.embedding_threshold = float(
             updates["embedding_threshold"]
         ) / 100.0

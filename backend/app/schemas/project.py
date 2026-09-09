@@ -30,6 +30,11 @@ class ProjectBase(BaseModel):
         description="List of valid label strings",
     )
 
+    automation_enabled: bool = Field(
+        default=False,
+        description="Whether Phase 4 automation is enabled",
+    )
+
 
 class ProjectCreate(ProjectBase):
     """Schema for creating a project."""
@@ -43,5 +48,6 @@ class ProjectResponse(ProjectBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    automation_enabled: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None

@@ -57,9 +57,8 @@ class Project(Base):
 
     automation_enabled = Column(
         Boolean,
+        default=False,
         nullable=False,
-        default=True,
-        server_default="true",
         doc="Whether Phase 4 automation is enabled for this project",
     )
 

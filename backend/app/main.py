@@ -41,6 +41,8 @@ async def lifespan(app: FastAPI):
     if settings.is_development and check_db_connection():
         try:
             Base.metadata.create_all(bind=engine)
+            from app.core.db_patch import ensure_schema_compatibility
+            ensure_schema_compatibility(engine)
         except Exception:
             pass
 
@@ -144,6 +146,12 @@ app.include_router(
     rerouting.router,
     prefix="/api",
     tags=["Task Rerouting"],
+)
+
+app.include_router(
+    rerouting.automation_router,
+    prefix="/api",
+    tags=["Automation Dashboard"],
 )
 
 app.include_router(

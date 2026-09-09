@@ -27,13 +27,27 @@ router = APIRouter(
 def list_projects(
     db: Session = Depends(get_db),
 ):
-    """List all annotation projects."""
+    """List all annotation projects. If empty, seed default Project 1."""
 
-    return (
+    projects = (
         db.query(Project)
         .order_by(Project.id)
         .all()
     )
+
+    if not projects:
+        default_project = Project(
+            name="Project 1",
+            description="AQG Demo Project",
+            label_set=["positive", "negative", "neutral"],
+            automation_enabled=False,
+        )
+        db.add(default_project)
+        db.commit()
+        db.refresh(default_project)
+        projects = [default_project]
+
+    return projects
 
 
 @router.get(

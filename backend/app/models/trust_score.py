@@ -71,6 +71,12 @@ class TrustScore(Base):
         nullable=True,
     )
 
+    _score = Column(
+        "score",
+        Numeric(10, 6),
+        nullable=True,
+    )
+
     final_score = Column(
         Numeric(10, 6),
         nullable=False,
@@ -115,16 +121,22 @@ class TrustScore(Base):
 
     def __init__(self, *args, **kwargs):
         if "score" in kwargs and "final_score" not in kwargs:
-            kwargs["final_score"] = kwargs.pop("score")
+            kwargs["final_score"] = kwargs["score"]
+        elif "final_score" in kwargs and "score" not in kwargs:
+            kwargs["score"] = kwargs["final_score"]
         super().__init__(*args, **kwargs)
+        if self.final_score is not None and self._score is None:
+            self._score = self.final_score
 
     @property
     def score(self):
         """Alias for final_score to preserve Phase 1 compatibility."""
-        return float(self.final_score) if self.final_score is not None else None
+        val = self._score if self._score is not None else self.final_score
+        return float(val) if val is not None else None
 
     @score.setter
     def score(self, value):
+        self._score = value
         self.final_score = value
 
     def __repr__(self) -> str:

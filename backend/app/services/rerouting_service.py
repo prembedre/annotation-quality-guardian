@@ -47,28 +47,6 @@ def get_pending_reroutes(
     """
 
     # ---------------------------------------------------------------
-    # Phase 4 automation master switch
-    # ---------------------------------------------------------------
-
-    settings_project_id = project_id or 1
-
-    project_settings = get_project_settings(
-        db=db,
-        project_id=settings_project_id,
-    )
-
-    automation_enabled = project_settings.get(
-        "automation_enabled",
-        True,
-    )
-
-    if not automation_enabled:
-        return ReroutePendingListResponse(
-            total=0,
-            items=[],
-        )
-
-    # ---------------------------------------------------------------
     # 1. Fetch explicit pending RerouteHistory records
     # ---------------------------------------------------------------
 
@@ -84,6 +62,30 @@ def get_pending_reroutes(
     pending_records = query.order_by(
         RerouteHistory.created_at.desc()
     ).all()
+
+    # ---------------------------------------------------------------
+    # Phase 4 automation master switch
+    # ---------------------------------------------------------------
+
+    settings_project_id = project_id or 1
+
+    try:
+        project_settings = get_project_settings(
+            db=db,
+            project_id=settings_project_id,
+        )
+        automation_enabled = project_settings.get(
+            "automation_enabled",
+            True,
+        )
+    except Exception:
+        automation_enabled = True
+
+    if not automation_enabled and not pending_records:
+        return ReroutePendingListResponse(
+            total=0,
+            items=[],
+        )
 
     # ---------------------------------------------------------------
     # Annotator lookup
@@ -147,19 +149,21 @@ def get_pending_reroutes(
 
     # ---------------------------------------------------------------
     # 2. Check flagged TrustScores that do not have a resolved
-    # reroute record.
+    # reroute record (only if automation_enabled is True).
     # ---------------------------------------------------------------
 
-    flagged_ts_query = db.query(TrustScore).filter(
-        TrustScore.flagged == True
-    )
-
-    if project_id:
-        flagged_ts_query = flagged_ts_query.filter(
-            TrustScore.project_id == project_id
+    flagged_ts_list = []
+    if automation_enabled:
+        flagged_ts_query = db.query(TrustScore).filter(
+            TrustScore.flagged == True
         )
 
-    flagged_ts_list = flagged_ts_query.all()
+        if project_id:
+            flagged_ts_query = flagged_ts_query.filter(
+                TrustScore.project_id == project_id
+            )
+
+        flagged_ts_list = flagged_ts_query.all()
 
     for trust_score in flagged_ts_list:
 

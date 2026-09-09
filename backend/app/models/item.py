@@ -44,6 +44,12 @@ class Item(Base):
         nullable=False,
     )
 
+    source = Column(
+        String(255),
+        nullable=False,
+        default="default",
+    )
+
     content = Column(
         JSON,
         nullable=False,
@@ -69,7 +75,6 @@ class Item(Base):
     )
 
     def __init__(self, *args, **kwargs):
-        kwargs.pop("source", None)
         super().__init__(*args, **kwargs)
 
     # Relationships

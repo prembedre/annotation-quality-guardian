@@ -26,8 +26,6 @@ export default function ReviewQueue() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
 
-  // Using a default project ID for now.
-  // Ideally this would come from a context or URL parameter.
   const currentProjectId = 1;
 
   /**
@@ -56,14 +54,12 @@ export default function ReviewQueue() {
 
         const { data, pagination } = result;
 
-        setQueueData(data);
-        setTotal(pagination.total);
-        setTotalPages(pagination.totalPages);
+        setQueueData(data || []);
+        setTotal(pagination?.total || 0);
+        setTotalPages(pagination?.totalPages || 1);
         setPage(currentPage);
       } catch (fetchError) {
-        setError(
-          fetchError.message || 'Unable to load the review queue.'
-        );
+        setError(fetchError.message || 'Unable to load the review queue.');
         setQueueData([]);
       } finally {
         setLoading(false);
@@ -72,149 +68,66 @@ export default function ReviewQueue() {
     [pageSize, statusFilter, search, riskFilter, currentProjectId]
   );
 
-  /**
-   * Initial load
-   */
   useEffect(() => {
     fetchQueue(1, pageSize, statusFilter, search, riskFilter);
   }, []);
 
-  /**
-   * Handle filter changes - reset to page 1
-   */
   useEffect(() => {
     setPage(1);
     fetchQueue(1, pageSize, statusFilter, search, riskFilter);
   }, [statusFilter, search, riskFilter]);
 
-  /**
-   * Handle page size changes
-   */
   const handlePageSizeChange = useCallback(
     (newPageSize) => {
       setPageSize(newPageSize);
       setPage(1);
-
-      fetchQueue(
-        1,
-        newPageSize,
-        statusFilter,
-        search,
-        riskFilter
-      );
+      fetchQueue(1, newPageSize, statusFilter, search, riskFilter);
     },
     [statusFilter, search, riskFilter, fetchQueue]
   );
 
-  /**
-   * Handle page changes
-   */
   const handlePageChange = useCallback(
     (newPage) => {
-      const safePage = Math.min(
-        Math.max(1, newPage),
-        totalPages
-      );
-
-      fetchQueue(
-        safePage,
-        pageSize,
-        statusFilter,
-        search,
-        riskFilter
-      );
+      const safePage = Math.min(Math.max(1, newPage), totalPages);
+      fetchQueue(safePage, pageSize, statusFilter, search, riskFilter);
     },
-    [
-      pageSize,
-      statusFilter,
-      search,
-      riskFilter,
-      totalPages,
-      fetchQueue,
-    ]
+    [pageSize, statusFilter, search, riskFilter, totalPages, fetchQueue]
   );
 
-  /**
-   * Handle search changes
-   */
   const handleSearchChange = useCallback((value) => {
     setSearch(value);
     setPage(1);
   }, []);
 
-  /**
-   * Handle status filter changes
-   */
   const handleStatusChange = useCallback((value) => {
     setStatusFilter(value);
     setPage(1);
   }, []);
 
-  /**
-   * Handle risk filter changes
-   */
   const handleRiskChange = useCallback((value) => {
     setRiskFilter(value);
     setPage(1);
   }, []);
 
-  /**
-   * Clear all filters
-   */
   const handleClearFilters = useCallback(() => {
     setSearch('');
     setStatusFilter('all');
     setRiskFilter('all');
     setPage(1);
-
-    fetchQueue(
-      1,
-      pageSize,
-      'all',
-      '',
-      'all'
-    );
+    fetchQueue(1, pageSize, 'all', '', 'all');
   }, [pageSize, fetchQueue]);
 
-  /**
-   * Handle reviewer resolution actions
-   *
-   * Supported actions:
-   * - confirm
-   * - correct
-   * - escalate
-   */
   const handleResolve = useCallback(
     async (itemId, payload) => {
       try {
         setToastMessage('');
-
-        const result = await resolveReviewItem(
-          itemId,
-          payload
-        );
-
+        const result = await resolveReviewItem(itemId, payload);
         setToastType('success');
-        setToastMessage(
-          result.message ||
-            'Review item resolved successfully.'
-        );
+        setToastMessage(result?.message || 'Review item resolved successfully.');
 
-        // Refresh the queue so the updated item/status
-        // is immediately reflected in the UI.
-        await fetchQueue(
-          page,
-          pageSize,
-          statusFilter,
-          search,
-          riskFilter
-        );
+        await fetchQueue(page, pageSize, statusFilter, search, riskFilter);
       } catch (resolveError) {
-        console.error(
-          'Failed to resolve review item:',
-          resolveError
-        );
-
+        console.error('Failed to resolve review item:', resolveError);
         setToastType('error');
         setToastMessage(
           resolveError.response?.data?.detail ||
@@ -223,87 +136,50 @@ export default function ReviewQueue() {
         );
       }
     },
-    [
-      fetchQueue,
-      page,
-      pageSize,
-      statusFilter,
-      search,
-      riskFilter,
-    ]
+    [fetchQueue, page, pageSize, statusFilter, search, riskFilter]
   );
 
-  /**
-   * Handle dataset export
-   */
   const handleExport = useCallback(
     async (format) => {
       try {
-        const blob = await exportReviewQueue(
-          currentProjectId,
-          format
-        );
-
+        const blob = await exportReviewQueue(currentProjectId, format);
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-
         link.href = url;
         link.download = `aqg-project-${currentProjectId}.${format}`;
-
         document.body.appendChild(link);
         link.click();
         link.remove();
-
         URL.revokeObjectURL(url);
 
         setToastType('success');
-        setToastMessage(
-          `Dataset exported as ${format.toUpperCase()} successfully!`
-        );
+        setToastMessage(`Dataset exported as ${format.toUpperCase()} successfully!`);
       } catch (exportError) {
         setToastType('error');
         setToastMessage(
-          exportError.message ||
-            `Failed to export as ${format.toUpperCase()}.`
+          exportError.message || `Failed to export as ${format.toUpperCase()}.`
         );
       }
     },
     [currentProjectId]
   );
 
-  /**
-   * Handle retry after error
-   */
   const handleRetry = useCallback(() => {
-    fetchQueue(
-      page,
-      pageSize,
-      statusFilter,
-      search,
-      riskFilter
-    );
-  }, [
-    page,
-    pageSize,
-    statusFilter,
-    search,
-    riskFilter,
-    fetchQueue,
-  ]);
+    fetchQueue(page, pageSize, statusFilter, search, riskFilter);
+  }, [page, pageSize, statusFilter, search, riskFilter, fetchQueue]);
 
   return (
-    <div className="page-shell">
+    <div>
+      {/* Header with integrated export action */}
       <div className="page-header">
         <ReviewQueueHeader />
 
         <div className="export-actions">
-          <DatasetExport
-            onExport={handleExport}
-            disabled={loading}
-          />
+          <DatasetExport onExport={handleExport} disabled={loading} />
         </div>
       </div>
 
+      {/* Compact Horizontal Filter Bar */}
       <ReviewQueueFilters
         search={search}
         onSearchChange={handleSearchChange}
@@ -316,32 +192,28 @@ export default function ReviewQueue() {
         onClearFilters={handleClearFilters}
       />
 
-      {error && (
-        <ErrorState
-          message={error}
-          onRetry={handleRetry}
-        />
-      )}
+      {error && <ErrorState message={error} onRetry={handleRetry} />}
 
+      {/* Dense Results Table */}
       <ReviewQueueTable
         items={queueData}
         loading={loading}
         onResolve={handleResolve}
       />
 
-      {!loading &&
-        !error &&
-        queueData.length > 0 && (
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            totalRecords={total}
-            pageSize={pageSize}
-            onPageChange={handlePageChange}
-            disabled={loading}
-          />
-        )}
+      {/* Pagination */}
+      {!loading && !error && queueData.length > 0 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalRecords={total}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          disabled={loading}
+        />
+      )}
 
+      {/* Toast Feedback */}
       <Toast
         message={toastMessage}
         type={toastType}

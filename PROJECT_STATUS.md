@@ -3,7 +3,7 @@
 **Repository:** [prembedre/annotation-quality-guardian](https://github.com/prembedre/annotation-quality-guardian)  
 **Branch:** `main`  
 **Current Milestone:** Phase 4 — Automation & Database Integrations  
-**Status Date:** September 7, 2026  
+**Status Date:** September 9, 2026  
 **Overall Status:** 🟢 **Phase 1, 2, 3 Complete (100%) | Phase 4 Backend & Database Complete (100%)**
 
 ---
@@ -196,3 +196,23 @@ tests\scoring\test_leaderboard.py ...                                    [100%]
 
 ====================== 74 passed in 3.22s =======================
 ```
+
+---
+
+## 8. Recent Stabilization & Bug Fixes (September 2026)
+
+Following Phase 4 implementation, comprehensive bug fixes and stabilizations were applied to ensure full system functionality:
+
+### Database & Schema
+- **Dynamic Schema Patching:** Implemented `db_patch.py` to auto-patch the SQLite database schema on startup to seamlessly include missing columns like `projects.automation_enabled` without data loss.
+- **Model Stability:** Resolved `sqlite3.IntegrityError` (NOT NULL constraint failures) by adding a `score` alias mapping and property to the `TrustScore` ORM model, ensuring backward and forward compatibility.
+
+### Backend API Reliability
+- **Null-Safety & Graceful Degradation:** Fully refactored endpoints in `dashboard.py`, `rerouting.py`, and `review.py` to handle empty database states, missing project IDs, and annotator attribute variations (e.g., `username` vs `name`) gracefully, eliminating 500 Internal Server Errors.
+
+### Frontend Compatibility
+- **Robust Parsing:** Updated `Projects.jsx` to correctly parse and render array-based API responses and handle single-project-seed payloads dynamically.
+
+### Deployment & Verification
+- **Test Data Seeding:** Created a robust `seed_demo_data.py` script that populates all necessary tables (Projects, Annotators, Items, Annotations, TrustScores, RerouteHistory) for functional demonstrations.
+- **Live Servers:** Verified that the core endpoints function correctly via `verify_all.py`, with both the Vite frontend server and FastAPI backend daemon running successfully and accessible locally.

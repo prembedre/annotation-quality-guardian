@@ -29,7 +29,7 @@ def upgrade() -> None:
             "automation_enabled",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("TRUE"),
+            server_default=sa.text("0"),
         ),
     )
 

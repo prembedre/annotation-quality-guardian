@@ -248,6 +248,7 @@ def compute_and_save_item_trust_score(
         trust_score.behavioral_score = behavioral_score
         trust_score.embedding_score = embedding_score
         trust_score.final_score = final_score
+        trust_score.score = final_score
         trust_score.flagged = flagged
         trust_score.breakdown = breakdown
         trust_score.updated_at = datetime.utcnow()
@@ -260,6 +261,7 @@ def compute_and_save_item_trust_score(
             behavioral_score=behavioral_score,
             embedding_score=embedding_score,
             final_score=final_score,
+            score=final_score,
             flagged=flagged,
             breakdown=breakdown,
             created_at=datetime.utcnow(),
