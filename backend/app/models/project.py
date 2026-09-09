@@ -4,7 +4,7 @@ Project model representing an annotation dataset/task project.
 
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime
+from sqlalchemy import Boolean, Column, DateTime, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.db import Base
@@ -53,6 +53,14 @@ class Project(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
         nullable=True,
+    )
+
+    automation_enabled = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        doc="Whether Phase 4 automation is enabled for this project",
     )
 
     # Relationships
@@ -111,7 +119,6 @@ class Project(Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
-
 
     def __repr__(self) -> str:
         return f"<Project(id={self.id}, name='{self.name}')>"

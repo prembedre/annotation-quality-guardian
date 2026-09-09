@@ -1,6 +1,8 @@
 """
 Automated Task Rerouting Service.
+
 Handles task reassignments, pending reroute queries, and history tracking.
+Also respects the Phase 4 project-level automation setting.
 """
 
 from datetime import datetime
@@ -13,10 +15,15 @@ from app.models.item import Item
 from app.models.annotator import Annotator
 from app.models.trust_score import TrustScore
 from app.models.annotation import Annotation
+
 from app.schemas.rerouting import (
     RerouteItemPendingResponse,
     ReroutePendingListResponse,
     RerouteAssignResponse,
+)
+
+from app.services.project_settings_service import (
+    get_project_settings,
 )
 
 
@@ -32,69 +39,117 @@ def get_pending_reroutes(
     2. Flagged TrustScore items that do not have any resolved reroute
        history.
 
+    When Phase 4 automation is disabled for the project, no pending
+    reroute candidates are returned.
+
     Items with an ASSIGNED or otherwise resolved reroute are excluded
     from the fallback flagged-item queue.
     """
 
-    # 1. Fetch pending RerouteHistory records.
+    # ---------------------------------------------------------------
+    # Phase 4 automation master switch
+    # ---------------------------------------------------------------
+
+    settings_project_id = project_id or 1
+
+    project_settings = get_project_settings(
+        db=db,
+        project_id=settings_project_id,
+    )
+
+    automation_enabled = project_settings.get(
+        "automation_enabled",
+        True,
+    )
+
+    if not automation_enabled:
+        return ReroutePendingListResponse(
+            total=0,
+            items=[],
+        )
+
+    # ---------------------------------------------------------------
+    # 1. Fetch explicit pending RerouteHistory records
+    # ---------------------------------------------------------------
+
     query = db.query(RerouteHistory).filter(
         RerouteHistory.reroute_status == "PENDING"
     )
 
     if project_id:
-        query = query.filter(RerouteHistory.project_id == project_id)
+        query = query.filter(
+            RerouteHistory.project_id == project_id
+        )
 
     pending_records = query.order_by(
         RerouteHistory.created_at.desc()
     ).all()
 
+    # ---------------------------------------------------------------
+    # Annotator lookup
+    # ---------------------------------------------------------------
+
     annotators_map = {
-        a.id: a.username
-        for a in db.query(Annotator).all()
+        annotator.id: annotator.username
+        for annotator in db.query(Annotator).all()
     }
 
     results: List[RerouteItemPendingResponse] = []
     seen_item_ids = set()
 
-    for rec in pending_records:
-        item = rec.item
+    # ---------------------------------------------------------------
+    # Convert explicit pending reroutes
+    # ---------------------------------------------------------------
+
+    for record in pending_records:
+        item = record.item
 
         if not item:
             continue
 
-        orig_name = (
-            annotators_map.get(rec.original_annotator_id)
-            if rec.original_annotator_id
+        original_name = (
+            annotators_map.get(
+                record.original_annotator_id
+            )
+            if record.original_annotator_id
             else None
         )
 
-        ts_val = (
-            float(rec.trust_score_snapshot)
-            if rec.trust_score_snapshot is not None
+        trust_score_value = (
+            float(record.trust_score_snapshot)
+            if record.trust_score_snapshot is not None
             else None
         )
 
         results.append(
             RerouteItemPendingResponse(
-                reroute_id=rec.id,
+                reroute_id=record.id,
                 item_id=item.id,
-                project_id=rec.project_id,
+                project_id=record.project_id,
                 external_id=item.external_id or str(item.id),
-                original_annotator_id=rec.original_annotator_id,
-                original_annotator_name=orig_name,
-                reason=rec.reason or "Flagged for task rerouting",
-                trust_score=ts_val,
+                original_annotator_id=(
+                    record.original_annotator_id
+                ),
+                original_annotator_name=original_name,
+                reason=(
+                    record.reason
+                    or "Flagged for task rerouting"
+                ),
+                trust_score=trust_score_value,
                 flagged=True,
-                reroute_status=rec.reroute_status,
+                reroute_status=record.reroute_status,
                 content=item.content or {},
-                created_at=rec.created_at,
+                created_at=record.created_at,
             )
         )
 
         seen_item_ids.add(item.id)
 
-    # 2. Check flagged TrustScores that do not yet have a resolved
+    # ---------------------------------------------------------------
+    # 2. Check flagged TrustScores that do not have a resolved
     # reroute record.
+    # ---------------------------------------------------------------
+
     flagged_ts_query = db.query(TrustScore).filter(
         TrustScore.flagged == True
     )
@@ -106,68 +161,103 @@ def get_pending_reroutes(
 
     flagged_ts_list = flagged_ts_query.all()
 
-    for ts in flagged_ts_list:
-        if ts.item_id in seen_item_ids:
+    for trust_score in flagged_ts_list:
+
+        if trust_score.item_id in seen_item_ids:
             continue
 
         # IMPORTANT:
-        # A flagged item must not appear as pending if it already has
-        # a resolved reroute such as ASSIGNED.
+        #
+        # A flagged item must not appear as pending if it already
+        # has a resolved reroute such as ASSIGNED.
         resolved_reroute = (
             db.query(RerouteHistory)
             .filter(
-                RerouteHistory.item_id == ts.item_id,
-                RerouteHistory.reroute_status != "PENDING",
+                RerouteHistory.item_id
+                == trust_score.item_id,
+                RerouteHistory.reroute_status
+                != "PENDING",
             )
-            .order_by(RerouteHistory.id.desc())
+            .order_by(
+                RerouteHistory.id.desc()
+            )
             .first()
         )
 
         if resolved_reroute:
             continue
 
+        # -----------------------------------------------------------
+        # Find the item
+        # -----------------------------------------------------------
+
         item = (
             db.query(Item)
-            .filter(Item.id == ts.item_id)
+            .filter(
+                Item.id == trust_score.item_id
+            )
             .first()
         )
 
         if not item:
             continue
 
-        # Find original annotator from item annotations.
-        ann = (
+        # -----------------------------------------------------------
+        # Find original annotator from annotations
+        # -----------------------------------------------------------
+
+        annotation = (
             db.query(Annotation)
-            .filter(Annotation.item_id == item.id)
+            .filter(
+                Annotation.item_id == item.id
+            )
             .first()
         )
 
-        orig_ann_id = ann.annotator_id if ann else None
-        orig_name = (
-            annotators_map.get(orig_ann_id)
-            if orig_ann_id
+        original_annotator_id = (
+            annotation.annotator_id
+            if annotation
             else None
         )
 
-        score_val = (
-            float(ts.final_score)
-            if ts.final_score is not None
+        original_annotator_name = (
+            annotators_map.get(
+                original_annotator_id
+            )
+            if original_annotator_id
             else None
         )
+
+        score_value = (
+            float(trust_score.final_score)
+            if trust_score.final_score is not None
+            else None
+        )
+
+        # -----------------------------------------------------------
+        # Add flagged item as pending reroute
+        # -----------------------------------------------------------
 
         results.append(
             RerouteItemPendingResponse(
                 reroute_id=None,
                 item_id=item.id,
                 project_id=item.project_id,
-                external_id=item.external_id or str(item.id),
-                original_annotator_id=orig_ann_id,
-                original_annotator_name=orig_name,
+                external_id=(
+                    item.external_id
+                    or str(item.id)
+                ),
+                original_annotator_id=(
+                    original_annotator_id
+                ),
+                original_annotator_name=(
+                    original_annotator_name
+                ),
                 reason=(
-                    f"Low trust score ({score_val}) - "
+                    f"Low trust score ({score_value}) - "
                     "flagged for reassignment"
                 ),
-                trust_score=score_val,
+                trust_score=score_value,
                 flagged=True,
                 reroute_status="PENDING",
                 content=item.content or {},
@@ -176,6 +266,10 @@ def get_pending_reroutes(
         )
 
         seen_item_ids.add(item.id)
+
+    # ---------------------------------------------------------------
+    # Return pending reroutes
+    # ---------------------------------------------------------------
 
     return ReroutePendingListResponse(
         total=len(results),
@@ -191,13 +285,33 @@ def create_reroute_task(
     reason: Optional[str] = None,
     trust_score_snapshot: Optional[float] = None,
 ) -> RerouteHistory:
-    """Create a new pending reroute history record."""
+    """
+    Create a new pending reroute history record.
+
+    This function respects the project automation setting.
+    """
+
+    project_settings = get_project_settings(
+        db=db,
+        project_id=project_id,
+    )
+
+    if not project_settings.get(
+        "automation_enabled",
+        True,
+    ):
+        raise ValueError(
+            "Phase 4 automation is disabled for this project."
+        )
 
     reroute = RerouteHistory(
         item_id=item_id,
         project_id=project_id,
         original_annotator_id=original_annotator_id,
-        reason=reason or "Task rerouting triggered",
+        reason=(
+            reason
+            or "Task rerouting triggered"
+        ),
         trust_score_snapshot=trust_score_snapshot,
         reroute_status="PENDING",
         created_at=datetime.utcnow(),
@@ -218,70 +332,128 @@ def assign_reroute_task(
 ) -> RerouteAssignResponse:
     """
     Assign or reassign an item to a new annotator,
-    updating reroute status to 'ASSIGNED'.
+    updating reroute status to ASSIGNED.
+
+    Manual assignment remains available even when automatic
+    rerouting is disabled.
     """
+
+    # ---------------------------------------------------------------
+    # Find item
+    # ---------------------------------------------------------------
 
     item = (
         db.query(Item)
-        .filter(Item.id == item_id)
+        .filter(
+            Item.id == item_id
+        )
         .first()
     )
 
     if not item:
-        raise ValueError(f"Item with ID {item_id} not found.")
+        raise ValueError(
+            f"Item with ID {item_id} not found."
+        )
+
+    # ---------------------------------------------------------------
+    # Find reassigned annotator
+    # ---------------------------------------------------------------
 
     reassigned_annotator = (
         db.query(Annotator)
-        .filter(Annotator.id == reassigned_annotator_id)
+        .filter(
+            Annotator.id
+            == reassigned_annotator_id
+        )
         .first()
     )
 
     if not reassigned_annotator:
         raise ValueError(
-            f"Annotator with ID {reassigned_annotator_id} not found."
+            "Annotator with ID "
+            f"{reassigned_annotator_id} not found."
         )
 
-    # Check if a pending reroute record exists.
+    # ---------------------------------------------------------------
+    # Check for an existing pending reroute
+    # ---------------------------------------------------------------
+
     reroute = (
         db.query(RerouteHistory)
         .filter(
             RerouteHistory.item_id == item_id,
             RerouteHistory.reroute_status == "PENDING",
         )
-        .order_by(RerouteHistory.id.desc())
+        .order_by(
+            RerouteHistory.id.desc()
+        )
         .first()
     )
 
     if not reroute:
-        # Check original annotator.
-        ann = (
+
+        # -----------------------------------------------------------
+        # Find original annotator
+        # -----------------------------------------------------------
+
+        annotation = (
             db.query(Annotation)
-            .filter(Annotation.item_id == item_id)
+            .filter(
+                Annotation.item_id == item_id
+            )
             .first()
         )
 
-        orig_ann_id = ann.annotator_id if ann else None
-
-        ts = (
-            db.query(TrustScore)
-            .filter(TrustScore.item_id == item_id)
-            .order_by(TrustScore.id.desc())
-            .first()
-        )
-
-        ts_val = (
-            float(ts.final_score)
-            if ts and ts.final_score is not None
+        original_annotator_id = (
+            annotation.annotator_id
+            if annotation
             else None
         )
+
+        # -----------------------------------------------------------
+        # Find latest trust score
+        # -----------------------------------------------------------
+
+        trust_score = (
+            db.query(TrustScore)
+            .filter(
+                TrustScore.item_id == item_id
+            )
+            .order_by(
+                TrustScore.id.desc()
+            )
+            .first()
+        )
+
+        trust_score_value = (
+            float(trust_score.final_score)
+            if (
+                trust_score
+                and trust_score.final_score is not None
+            )
+            else None
+        )
+
+        # -----------------------------------------------------------
+        # Create assigned reroute history
+        # -----------------------------------------------------------
 
         reroute = RerouteHistory(
             item_id=item_id,
             project_id=item.project_id,
-            original_annotator_id=orig_ann_id,
-            reassigned_annotator_id=reassigned_annotator_id,
-            reason=reason or "Task reassigned by supervisor",
-            trust_score_snapshot=ts_val,
+            original_annotator_id=(
+                original_annotator_id
+            ),
+            reassigned_annotator_id=(
+                reassigned_annotator_id
+            ),
+            reason=(
+                reason
+                or "Task reassigned by supervisor"
+            ),
+            trust_score_snapshot=(
+                trust_score_value
+            ),
             reroute_status="ASSIGNED",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -290,13 +462,25 @@ def assign_reroute_task(
         db.add(reroute)
 
     else:
-        reroute.reassigned_annotator_id = reassigned_annotator_id
+
+        # -----------------------------------------------------------
+        # Resolve existing pending reroute
+        # -----------------------------------------------------------
+
+        reroute.reassigned_annotator_id = (
+            reassigned_annotator_id
+        )
+
         reroute.reroute_status = "ASSIGNED"
 
         if reason:
             reroute.reason = reason
 
         reroute.updated_at = datetime.utcnow()
+
+    # ---------------------------------------------------------------
+    # Save changes
+    # ---------------------------------------------------------------
 
     db.commit()
     db.refresh(reroute)
@@ -306,12 +490,20 @@ def assign_reroute_task(
         reroute_id=reroute.id,
         item_id=item.id,
         project_id=item.project_id,
-        original_annotator_id=reroute.original_annotator_id,
-        reassigned_annotator_id=reassigned_annotator_id,
+        original_annotator_id=(
+            reroute.original_annotator_id
+        ),
+        reassigned_annotator_id=(
+            reassigned_annotator_id
+        ),
         reroute_status="ASSIGNED",
         message=(
-            f"Item {item.id} successfully rerouted and assigned "
-            f"to Annotator {reassigned_annotator.username}."
+            f"Item {item.id} successfully rerouted "
+            "and assigned to Annotator "
+            f"{reassigned_annotator.username}."
         ),
-        assigned_at=reroute.updated_at or reroute.created_at,
+        assigned_at=(
+            reroute.updated_at
+            or reroute.created_at
+        ),
     )

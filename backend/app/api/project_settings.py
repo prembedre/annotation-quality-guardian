@@ -1,8 +1,11 @@
 """
-API routes for Project Scoring Settings and Quality Thresholds.
+Project Settings API.
+
+Provides endpoints for reading and updating project-level
+quality thresholds and Phase 4 automation controls.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -15,6 +18,7 @@ from app.services.project_settings_service import (
     update_project_settings,
 )
 
+
 router = APIRouter(
     prefix="/projects",
     tags=["Project Settings"],
@@ -24,44 +28,45 @@ router = APIRouter(
 @router.get(
     "/{project_id}/settings",
     response_model=ProjectSettingsSchema,
-    summary="Get project scoring thresholds",
 )
-async def read_project_settings(
+def get_settings(
     project_id: int,
     db: Session = Depends(get_db),
 ):
     """
-    Retrieve current quality scoring thresholds for a project.
+    Get project scoring thresholds and Phase 4 automation settings.
     """
+
     try:
-        return get_project_settings(db=db, project_id=project_id)
+        return get_project_settings(
+            db=db,
+            project_id=project_id,
+        )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail=str(exc),
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch project settings: {str(exc)}",
-        )
+        ) from exc
 
 
 @router.put(
     "/{project_id}/settings",
     response_model=ProjectSettingsSchema,
-    summary="Update project scoring thresholds",
 )
-async def modify_project_settings(
+def update_settings(
     project_id: int,
-    payload: ProjectSettingsUpdateSchema,
+    settings: ProjectSettingsUpdateSchema,
     db: Session = Depends(get_db),
 ):
     """
-    Update quality scoring thresholds for a project.
+    Update project scoring thresholds and Phase 4 automation settings.
     """
+
     try:
-        updates = payload.model_dump(exclude_unset=True)
+        updates = settings.model_dump(
+            exclude_unset=True,
+        )
+
         return update_project_settings(
             db=db,
             project_id=project_id,
@@ -69,11 +74,6 @@ async def modify_project_settings(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail=str(exc),
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update project settings: {str(exc)}",
-        )
+        ) from exc

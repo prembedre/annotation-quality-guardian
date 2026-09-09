@@ -13,6 +13,8 @@ import ReviewQueue from './pages/ReviewQueue';
 import ProjectSettings from './pages/ProjectSettings';
 import Integrations from './pages/Integrations';
 import AutomationDashboard from './pages/AutomationDashboard';
+import ABTesting from './pages/ABTesting';
+import AmbiguityInsights from './pages/AmbiguityInsights';
 
 function App() {
   return (
@@ -63,26 +65,66 @@ function App() {
                 Automation
               </NavLink>
             </li>
+
+            <li>
+              <NavLink to="/ab-testing">
+                A/B Testing
+              </NavLink>
+            </li>
+
+            <li>
+              <NavLink to="/ambiguity">
+                Ambiguous Classes
+              </NavLink>
+            </li>
           </ul>
         </nav>
 
         <main className="content">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/scores" element={<Scores />} />
-            <Route path="/review-queue" element={<ReviewQueue />} />
+            <Route
+              path="/"
+              element={<Dashboard />}
+            />
+
+            <Route
+              path="/projects"
+              element={<Projects />}
+            />
+
+            <Route
+              path="/scores"
+              element={<Scores />}
+            />
+
+            <Route
+              path="/review-queue"
+              element={<ReviewQueue />}
+            />
+
             <Route
               path="/project-settings"
               element={<ProjectSettings />}
             />
+
             <Route
               path="/integrations"
               element={<Integrations />}
             />
+
             <Route
               path="/automation"
               element={<AutomationDashboard />}
+            />
+
+            <Route
+              path="/ab-testing"
+              element={<ABTesting />}
+            />
+
+            <Route
+              path="/ambiguity"
+              element={<AmbiguityInsights />}
             />
           </Routes>
         </main>
