@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { fetchProjects, createProject } from '../services/api';
 import { FolderGit2, Plus, Users, FileText, Calendar, ArrowUpRight, X } from 'lucide-react';
+import { ErrorState, EmptyState } from '../components';
 
 function Projects() {
   const [projects, setProjects] = useState([]);
@@ -11,17 +12,21 @@ function Projects() {
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
 
-  const loadProjects = () => {
+  const loadProjects = useCallback(() => {
     setLoading(true);
+    setError('');
     fetchProjects()
       .then((data) => setProjects(Array.isArray(data) ? data : data?.projects || []))
-      .catch((err) => console.error('Failed to fetch projects:', err))
+      .catch((err) => {
+        console.error('Failed to fetch projects:', err);
+        setError(err.response?.data?.detail || 'Failed to load projects.');
+      })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
     loadProjects();
-  }, []);
+  }, [loadProjects]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -63,38 +68,33 @@ function Projects() {
         </button>
       </div>
 
-      {loading ? (
-        <div className="project-grid">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="card" style={{ height: '220px' }}>
-              <div className="skeleton-row" style={{ width: '60%' }} />
-              <div className="skeleton-row" style={{ width: '90%', height: '20px' }} />
-              <div className="skeleton-row" style={{ width: '40%', marginTop: 'auto' }} />
+      {error && <ErrorState message={error} onRetry={loadProjects} />}
+
+      {!error && (
+        <>
+          {loading ? (
+            <div className="project-grid">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="card" style={{ height: '220px' }}>
+                  <div className="skeleton-row" style={{ width: '60%' }} />
+                  <div className="skeleton-row" style={{ width: '90%', height: '20px' }} />
+                  <div className="skeleton-row" style={{ width: '40%', marginTop: 'auto' }} />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : projects.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <FolderGit2 size={24} />
+          ) : projects.length === 0 ? (
+            <div className="card">
+              <EmptyState
+                icon={FolderGit2}
+                type="neutral"
+                title="No Projects Configured"
+                description="Get started by creating your first dataset project to begin tracking annotation quality."
+                actionLabel="Create Project"
+                onAction={() => setShowModal(true)}
+              />
             </div>
-            <h3>No Projects Configured</h3>
-            <p>
-              Get started by creating your first dataset project to begin tracking annotation quality.
-            </p>
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={() => setShowModal(true)}
-            >
-              <Plus size={16} />
-              <span>Create Project</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="project-grid">
+          ) : (
+            <div className="project-grid">
           {projects.map((project) => (
             <div className="project-card" key={project.id}>
               <div>
@@ -204,6 +204,8 @@ function Projects() {
           </div>
         </div>
       )}
+    </>
+  )}
 
       {/* Create Project Modal */}
       {showModal && (

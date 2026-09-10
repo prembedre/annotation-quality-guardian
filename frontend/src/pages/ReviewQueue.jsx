@@ -192,14 +192,16 @@ export default function ReviewQueue() {
         onClearFilters={handleClearFilters}
       />
 
-      {error && <ErrorState message={error} onRetry={handleRetry} />}
-
-      {/* Dense Results Table */}
-      <ReviewQueueTable
-        items={queueData}
-        loading={loading}
-        onResolve={handleResolve}
-      />
+      {error ? (
+        <ErrorState message={error} onRetry={handleRetry} />
+      ) : (
+        /* Dense Results Table */
+        <ReviewQueueTable
+          items={queueData}
+          loading={loading}
+          onResolve={handleResolve}
+        />
+      )}
 
       {/* Pagination */}
       {!loading && !error && queueData.length > 0 && (

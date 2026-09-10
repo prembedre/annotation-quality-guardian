@@ -1103,11 +1103,36 @@ td strong {
   height: 54px;
   border-radius: 50%;
   background: var(--accent-50);
+  border: 1px solid var(--accent-200);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-400);
+  color: var(--accent-600);
   margin-bottom: 1rem;
+}
+
+.empty-state-icon.neutral {
+  background: var(--accent-50);
+  border: 1px solid var(--accent-200);
+  color: var(--accent-600);
+}
+
+.empty-state-icon.success {
+  background: var(--status-good-bg);
+  border: 1px solid var(--status-good-border);
+  color: var(--status-good-text);
+}
+
+.empty-state-icon.warning {
+  background: var(--status-medium-bg);
+  border: 1px solid var(--status-medium-border);
+  color: var(--status-medium-text);
+}
+
+.empty-state-icon.danger {
+  background: var(--status-risk-bg);
+  border: 1px solid var(--status-risk-border);
+  color: var(--status-risk-text);
 }
 
 .empty-state h3,
@@ -1125,12 +1150,18 @@ td strong {
   line-height: 1.5;
 }
 
+.skeleton-row,
+.skeleton-box,
+.skeleton-text,
+.skeleton-card {
+  background: linear-gradient(90deg, #E5E7EB 25%, #F3F4F6 50%, #E5E7EB 75%);
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
 .skeleton-row {
   height: 42px;
-  background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-surface-elevated) 50%, var(--bg-surface) 75%);
-  background-size: 200% 100%;
-  animation: skeletonPulse 1.5s infinite;
-  border-radius: var(--radius-sm);
   margin-bottom: 0.5rem;
 }
 
@@ -1141,6 +1172,7 @@ td strong {
 
 /* ── Alerts & Toasts ───────────────────────────────────────────────────── */
 .alert,
+.alert-error,
 .dashboard-error,
 .integration-error,
 .settings-error,
@@ -1154,8 +1186,21 @@ td strong {
   margin-bottom: 1.25rem;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
   font-size: 0.85rem;
+}
+
+.alert .secondary-btn {
+  background: var(--bg-surface);
+  border-color: var(--status-risk-border);
+  color: var(--status-risk-text);
+}
+
+.alert .secondary-btn:hover:not(:disabled) {
+  background: #FFFFFF;
+  border-color: var(--status-risk-solid);
+  color: var(--status-risk-text);
 }
 
 .integration-success,

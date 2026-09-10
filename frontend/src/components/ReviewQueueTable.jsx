@@ -229,8 +229,8 @@ export function ReviewQueueTable({
     return (
       <div className="card">
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <Check size={24} />
+          <div className="empty-state-icon success">
+            <Check size={26} />
           </div>
           <h3>All Caught Up</h3>
           <p>No items match the current review filters.</p>

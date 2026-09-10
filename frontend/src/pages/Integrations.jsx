@@ -20,6 +20,7 @@ import {
   Activity,
   Layers,
 } from 'lucide-react';
+import { ErrorState, EmptyState, LoadingState } from '../components';
 
 const PROJECT_ID = 1;
 
@@ -268,12 +269,7 @@ export default function Integrations() {
         </div>
       )}
 
-      {error && (
-        <div className="alert">
-          <AlertOctagon size={16} />
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <ErrorState message={error} onRetry={loadConnectors} />}
 
       {/* Add Connector Modal Dialog */}
       {showForm && (
@@ -398,27 +394,25 @@ export default function Integrations() {
                 )}
 
                 <div>
-                  <label htmlFor="status">Initial Status</label>
+                  <label htmlFor="status">Connection Mode</label>
                   <select
                     id="status"
                     name="status"
                     value={form.status}
                     onChange={handleFormChange}
                   >
-                    <option value="active">Active</option>
-                    <option value="disabled">Disabled</option>
+                    <option value="active">Active Monitoring</option>
+                    <option value="paused">Paused</option>
                   </select>
                 </div>
               </div>
 
               <div className="integration-readonly-note">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--status-info-text)', fontWeight: 600 }}>
-                  <ShieldCheck size={14} />
-                  <span>Enforced Read-Only Protocol</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  <ShieldCheck size={14} style={{ color: 'var(--status-good-solid)' }} />
+                  <span>Enforced Security Policy</span>
                 </div>
-                <span style={{ color: 'var(--text-muted)' }}>
-                  AQG never executes DDL or write transactions on your production labeling databases.
-                </span>
+                <span>AQG strictly queries data in read-only mode and will never modify or drop tables in your target database.</span>
               </div>
 
               <div className="modal-footer">
@@ -444,46 +438,38 @@ export default function Integrations() {
       )}
 
       {/* Connected Platforms Card */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div className="card-header" style={{ marginBottom: 0 }}>
-            <div>
-              <h2>Connected Labeling Databases</h2>
-              <p>Registered database connections with synchronized schema ingest.</p>
+      {!error && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div className="card-header" style={{ marginBottom: 0 }}>
+              <div>
+                <h2>Connected Labeling Databases</h2>
+                <p>Registered database connections with synchronized schema ingest.</p>
+              </div>
+              {!loading && (
+                <span className="badge badge-info">
+                  {connectors.length} connector{connectors.length === 1 ? '' : 's'}
+                </span>
+              )}
             </div>
-            <span className="badge badge-info">
-              {connectors.length} connector{connectors.length === 1 ? '' : 's'}
-            </span>
           </div>
-        </div>
 
-        {loading ? (
-          <div style={{ padding: '1.5rem' }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
-        ) : connectors.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <Database size={26} />
+          {loading ? (
+            <div style={{ padding: '1.5rem' }}>
+              <LoadingState count={3} />
             </div>
-            <h3>No External Connectors Configured</h3>
-            <p>
-              Connect AQG with an external labeling tool database (PostgreSQL, MySQL, SQLite) to sync item annotations into the guardian system.
-            </p>
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={() => setShowForm(true)}
-            >
-              <Plus size={16} />
-              <span>Add Your First Connector</span>
-            </button>
-          </div>
-        ) : (
-          <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-            <table>
+          ) : connectors.length === 0 ? (
+            <EmptyState
+              icon={Database}
+              type="neutral"
+              title="No External Connectors Configured"
+              description="Connect AQG with an external labeling tool database (PostgreSQL, MySQL, SQLite) to sync item annotations into the guardian system."
+              actionLabel="Add Your First Connector"
+              onAction={() => setShowForm(true)}
+            />
+          ) : (
+            <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
+              <table>
               <thead>
                 <tr>
                   <th>Connection Name</th>
@@ -665,6 +651,7 @@ export default function Integrations() {
           </div>
         )}
       </div>
+      )}
 
       {/* Sync Modal */}
       {syncConnectorId && (

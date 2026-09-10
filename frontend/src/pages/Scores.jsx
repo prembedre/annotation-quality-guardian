@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { fetchScores, computeScores } from '../services/api';
 import { Award, Play, RefreshCw, Terminal, CheckCircle2 } from 'lucide-react';
+import { ErrorState, EmptyState, LoadingState } from '../components';
 
 const PROJECT_ID = 1;
 
@@ -11,21 +12,21 @@ function Scores() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const loadScores = () => {
+  const loadScores = useCallback(() => {
     setLoading(true);
     setError('');
     fetchScores({ project_id: PROJECT_ID })
       .then((data) => setScores(data?.scores || (Array.isArray(data) ? data : [])))
       .catch((err) => {
         console.error('Failed to fetch scores:', err);
-        setError(err.response?.data?.detail || 'Failed to fetch scores.');
+        setError(err.response?.data?.detail || 'Failed to fetch quality scores.');
       })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
     loadScores();
-  }, []);
+  }, [loadScores]);
 
   const handleCompute = async () => {
     try {
@@ -83,27 +84,20 @@ function Scores() {
         </div>
       )}
 
-      {error && <div className="alert">{error}</div>}
-
-      {loading ? (
+      {error ? (
+        <ErrorState message={error} onRetry={loadScores} />
+      ) : loading ? (
         <div className="card">
-          <div style={{ padding: '1rem 0' }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
+          <LoadingState count={4} />
         </div>
       ) : scores.length === 0 ? (
         <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <Award size={26} />
-            </div>
-            <h3>No Scores Computed Yet</h3>
-            <p>
-              Quality scores have not been generated for Project {PROJECT_ID}. Trigger a computation to evaluate annotator agreement, gold accuracy, and anomaly signals.
-            </p>
-
+          <EmptyState
+            icon={Award}
+            type="neutral"
+            title="No Scores Computed Yet"
+            description={`Quality scores have not been generated for Project ${PROJECT_ID}. Trigger a computation to evaluate annotator agreement, gold accuracy, and anomaly signals.`}
+          >
             <button
               type="button"
               className="primary-btn"
@@ -149,14 +143,14 @@ function Scores() {
                   padding: '0.65rem 0.85rem',
                   borderRadius: 'var(--radius-sm)',
                   fontSize: '0.78rem',
-                  color: 'var(--accent-200)',
+                  color: 'var(--accent-600)',
                   overflowX: 'auto',
                 }}
               >
                 curl -X POST &quot;http://localhost:8000/api/scores/compute?project_id={PROJECT_ID}&quot;
               </pre>
             </div>
-          </div>
+          </EmptyState>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

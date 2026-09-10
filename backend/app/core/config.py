@@ -17,12 +17,23 @@ class EnvironmentType(str, Enum):
     TESTING = "testing"
 
 
+import os
+
+_curr_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.dirname(os.path.dirname(_curr_dir))
+_root_dir = os.path.dirname(_backend_dir)
+_env_files = [
+    os.path.join(_backend_dir, ".env"),
+    os.path.join(_root_dir, ".env"),
+    ".env",
+]
+
 class Settings(BaseSettings):
     """
     Application Settings loaded from environment variables and .env file.
     """
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[f for f in _env_files if os.path.exists(f)] or ".env",
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -41,8 +52,30 @@ class Settings(BaseSettings):
     # ── Database ──
     DATABASE_URL: str = Field(
         default="postgresql://postgres:postgres@localhost:5432/aqg_db",
-        description="SQLAlchemy Database connection URI (PostgreSQL)",
+        description="SQLAlchemy Database connection URI",
     )
+
+    @property
+    def resolved_database_url(self) -> str:
+        """Return database URL with resolved absolute path for SQLite."""
+        url = self.DATABASE_URL
+        if url.startswith("sqlite:///"):
+            path_part = url[len("sqlite:///"):]
+            if not os.path.isabs(path_part):
+                # Try finding aqg_dev.db in root or backend
+                cleaned_path = path_part.lstrip("./")
+                root_candidate = os.path.join(_root_dir, cleaned_path)
+                backend_candidate = os.path.join(_backend_dir, cleaned_path)
+                if os.path.exists(root_candidate):
+                    target = root_candidate.replace("\\", "/")
+                    return f"sqlite:///{target}"
+                elif os.path.exists(backend_candidate):
+                    target = backend_candidate.replace("\\", "/")
+                    return f"sqlite:///{target}"
+                else:
+                    target = root_candidate.replace("\\", "/")
+                    return f"sqlite:///{target}"
+        return url
 
     # ── Cache / Queue / Celery ──
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"

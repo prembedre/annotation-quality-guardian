@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
 import {
   AlertTriangle,
@@ -7,9 +7,9 @@ import {
   TrendingUp,
   RefreshCw,
   CheckCircle2,
-  AlertOctagon,
   ArrowUpDown,
 } from 'lucide-react';
+import { ErrorState, EmptyState, StatCard, LoadingState } from '../components';
 
 const PROJECT_ID = 1;
 
@@ -25,7 +25,7 @@ function AmbiguityInsights() {
   const [sortField, setSortField] = useState('disagreement_rate');
   const [sortAsc, setSortAsc] = useState(false);
 
-  async function loadInsights() {
+  const loadInsights = useCallback(async () => {
     setLoading(true);
     setError('');
 
@@ -42,11 +42,11 @@ function AmbiguityInsights() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadInsights();
-  }, []);
+  }, [loadInsights]);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -95,84 +95,51 @@ function AmbiguityInsights() {
         </button>
       </div>
 
-      {error && (
-        <div className="alert">
-          <AlertOctagon size={16} />
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <ErrorState message={error} onRetry={loadInsights} />}
 
       {/* 4 Standardized Stat Tiles */}
       <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Total Classes</span>
-            <div className="stat-icon">
-              <Layers size={16} />
-            </div>
-          </div>
-          <div className="stat-value">{data?.total_classes ?? 0}</div>
-          <div className="stat-subtext">Active categories evaluated</div>
-        </div>
+        <StatCard
+          label="Total Classes"
+          value={data?.total_classes ?? 0}
+          icon={Layers}
+          subtext="Active categories evaluated"
+          loading={loading}
+        />
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Ambiguous Classes</span>
-            <div
-              className="stat-icon"
-              style={{
-                background:
-                  (data?.ambiguous_classes ?? 0) > 0
-                    ? 'var(--status-risk-bg)'
-                    : 'var(--status-good-bg)',
-                color:
-                  (data?.ambiguous_classes ?? 0) > 0
-                    ? 'var(--status-risk-text)'
-                    : 'var(--status-good-text)',
-              }}
-            >
-              <AlertTriangle size={16} />
-            </div>
-          </div>
-          <div className="stat-value">{data?.ambiguous_classes ?? 0}</div>
-          <div className="stat-subtext">
-            {(data?.ambiguous_classes ?? 0) > 0 ? (
+        <StatCard
+          label="Ambiguous Classes"
+          value={data?.ambiguous_classes ?? 0}
+          icon={AlertTriangle}
+          subtext={
+            (data?.ambiguous_classes ?? 0) > 0 ? (
               <span className="badge badge-risk">High Friction</span>
             ) : (
               <span className="badge badge-good">High Consensus</span>
-            )}
-          </div>
-        </div>
+            )
+          }
+          loading={loading}
+        />
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Disagreement Threshold</span>
-            <div className="stat-icon">
-              <Sliders size={16} />
-            </div>
-          </div>
-          <div className="stat-value">
-            {formatPercent(data?.disagreement_threshold)}
-          </div>
-          <div className="stat-subtext">Trigger level for ambiguity flag</div>
-        </div>
+        <StatCard
+          label="Disagreement Threshold"
+          value={formatPercent(data?.disagreement_threshold)}
+          icon={Sliders}
+          subtext="Trigger level for ambiguity flag"
+          loading={loading}
+        />
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Peak Disagreement</span>
-            <div className="stat-icon">
-              <TrendingUp size={16} />
-            </div>
-          </div>
-          <div className="stat-value">
-            {formatPercent(highestDisagreement)}
-          </div>
-          <div className="stat-subtext">Highest category disagreement</div>
-        </div>
+        <StatCard
+          label="Peak Disagreement"
+          value={formatPercent(highestDisagreement)}
+          icon={TrendingUp}
+          subtext="Highest category disagreement"
+          loading={loading}
+        />
       </div>
 
       {/* Visually Striking Ambiguity Alert Callout */}
-      {ambiguousClasses.length > 0 && (
+      {!loading && !error && ambiguousClasses.length > 0 && (
         <div
           className="card"
           style={{
@@ -224,147 +191,148 @@ function AmbiguityInsights() {
       )}
 
       {/* Merged Single Rich Visualization Table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div className="card-header" style={{ marginBottom: 0 }}>
-            <div>
-              <h2>Class Disagreement &amp; Friction Analysis</h2>
-              <p>
-                Consolidated breakdown displaying disagreement progress bars, comparison volumes, and ambiguity statuses.
-              </p>
+      {!error && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div className="card-header" style={{ marginBottom: 0 }}>
+              <div>
+                <h2>Class Disagreement &amp; Friction Analysis</h2>
+                <p>
+                  Consolidated breakdown displaying disagreement progress bars, comparison volumes, and ambiguity statuses.
+                </p>
+              </div>
+              {!loading && (
+                <span className="badge badge-info">{classes.length} classes analyzed</span>
+              )}
             </div>
-            <span className="badge badge-info">{classes.length} classes analyzed</span>
           </div>
-        </div>
 
-        {loading ? (
-          <div style={{ padding: '1.5rem' }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
-        ) : classes.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <CheckCircle2 size={26} />
+          {loading ? (
+            <div style={{ padding: '1.5rem' }}>
+              <LoadingState count={4} />
             </div>
-            <h3>No Class Disagreement Detected</h3>
-            <p>There are no category comparisons available for this project yet.</p>
-          </div>
-        ) : (
-          <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('label')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>Class Label</span>
-                      <ArrowUpDown size={12} />
-                    </div>
-                  </th>
-                  <th
-                    style={{ minWidth: '260px', cursor: 'pointer' }}
-                    onClick={() => handleSort('disagreement_rate')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>Disagreement Rate</span>
-                      <ArrowUpDown size={12} />
-                    </div>
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('occurrences')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>Occurrences</span>
-                      <ArrowUpDown size={12} />
-                    </div>
-                  </th>
-                  <th
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('disagreements')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>Disagreements</span>
-                      <ArrowUpDown size={12} />
-                    </div>
-                  </th>
-                  <th>Comparisons</th>
-                  <th style={{ textAlign: 'right', paddingRight: '1.5rem' }}>Quality Tier</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {classes.map((item) => {
-                  const pct = Math.min((item.disagreement_rate || 0) * 100, 100);
-                  const isAmbiguous = item.ambiguous;
-
-                  return (
-                    <tr
-                      key={item.label}
-                      style={{
-                        background: isAmbiguous ? 'rgba(244, 63, 94, 0.04)' : undefined,
-                      }}
+          ) : classes.length === 0 ? (
+            <EmptyState
+              icon={CheckCircle2}
+              type="success"
+              title="No Class Disagreement Detected"
+              description="There are no category comparisons or disagreements for this project yet."
+            />
+          ) : (
+            <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('label')}
                     >
-                      <td>
-                        <strong>{item.label}</strong>
-                      </td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>Class Label</span>
+                        <ArrowUpDown size={12} />
+                      </div>
+                    </th>
+                    <th
+                      style={{ minWidth: '260px', cursor: 'pointer' }}
+                      onClick={() => handleSort('disagreement_rate')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>Disagreement Rate</span>
+                        <ArrowUpDown size={12} />
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('occurrences')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>Occurrences</span>
+                        <ArrowUpDown size={12} />
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSort('disagreements')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>Disagreements</span>
+                        <ArrowUpDown size={12} />
+                      </div>
+                    </th>
+                    <th>Comparisons</th>
+                    <th style={{ textAlign: 'right', paddingRight: '1.5rem' }}>Quality Tier</th>
+                  </tr>
+                </thead>
 
-                      <td>
-                        <div className="disagreement-cell-bar">
-                          <div className="progress-track">
-                            <div
-                              className={`progress-fill ${
-                                isAmbiguous ? 'high-disagreement' : ''
-                              }`}
-                              style={{ width: `${pct}%` }}
-                            />
+                <tbody>
+                  {classes.map((item) => {
+                    const pct = Math.min((item.disagreement_rate || 0) * 100, 100);
+                    const isAmbiguous = item.ambiguous;
+
+                    return (
+                      <tr
+                        key={item.label}
+                        style={{
+                          background: isAmbiguous ? 'rgba(244, 63, 94, 0.04)' : undefined,
+                        }}
+                      >
+                        <td>
+                          <strong>{item.label}</strong>
+                        </td>
+
+                        <td>
+                          <div className="disagreement-cell-bar">
+                            <div className="progress-track">
+                              <div
+                                className={`progress-fill ${
+                                  isAmbiguous ? 'high-disagreement' : ''
+                                }`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span
+                              className="mono-cell"
+                              style={{
+                                minWidth: '50px',
+                                fontWeight: 600,
+                                color: isAmbiguous
+                                  ? 'var(--status-risk-text)'
+                                  : 'var(--text-secondary)',
+                              }}
+                            >
+                              {formatPercent(item.disagreement_rate)}
+                            </span>
                           </div>
-                          <span
-                            className="mono-cell"
-                            style={{
-                              minWidth: '50px',
-                              fontWeight: 600,
-                              color: isAmbiguous
-                                ? 'var(--status-risk-text)'
-                                : 'var(--text-secondary)',
-                            }}
-                          >
-                            {formatPercent(item.disagreement_rate)}
-                          </span>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="mono-cell">{item.occurrences}</td>
+                        <td className="mono-cell">{item.occurrences}</td>
 
-                      <td className="mono-cell">{item.disagreements}</td>
+                        <td className="mono-cell">{item.disagreements}</td>
 
-                      <td className="mono-cell">{item.total_comparisons}</td>
+                        <td className="mono-cell">{item.total_comparisons}</td>
 
-                      <td style={{ textAlign: 'right', paddingRight: '1.5rem' }}>
-                        {isAmbiguous ? (
-                          <span className="badge badge-risk">
-                            <AlertTriangle size={11} />
-                            <span>Ambiguous</span>
-                          </span>
-                        ) : (
-                          <span className="badge badge-good">
-                            <CheckCircle2 size={11} />
-                            <span>Clear</span>
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                        <td style={{ textAlign: 'right', paddingRight: '1.5rem' }}>
+                          {isAmbiguous ? (
+                            <span className="badge badge-risk">
+                              <AlertTriangle size={11} />
+                              <span>Ambiguous</span>
+                            </span>
+                          ) : (
+                            <span className="badge badge-good">
+                              <CheckCircle2 size={11} />
+                              <span>Clear</span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

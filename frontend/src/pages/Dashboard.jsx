@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
 import { Users, Scale, Trophy, Activity, RefreshCw } from 'lucide-react';
+import { ErrorState, EmptyState, StatCard, LoadingState } from '../components';
 
 const PROJECT_ID = 1;
 
@@ -51,10 +52,12 @@ function getAvatarColor(name) {
 function AgreementHeatmap({ data }) {
   if (!data || !data.annotators?.length) {
     return (
-      <div className="empty-state">
-        <Activity size={24} style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }} />
-        <p>No agreement data available for this project.</p>
-      </div>
+      <EmptyState
+        icon={Activity}
+        type="neutral"
+        title="No Agreement Data"
+        description="No inter-annotator agreement matrix data available for this project yet."
+      />
     );
   }
 
@@ -166,8 +169,7 @@ export default function Dashboard() {
   const [leaderboardError, setLeaderboardError] = useState('');
   const [heatmapError, setHeatmapError] = useState('');
 
-  const loadData = async () => {
-    // Leaderboard
+  const loadLeaderboard = useCallback(async () => {
     try {
       setLoadingLeaderboard(true);
       setLeaderboardError('');
@@ -184,8 +186,9 @@ export default function Dashboard() {
     } finally {
       setLoadingLeaderboard(false);
     }
+  }, []);
 
-    // Heatmap
+  const loadHeatmap = useCallback(async () => {
     try {
       setLoadingHeatmap(true);
       setHeatmapError('');
@@ -201,16 +204,23 @@ export default function Dashboard() {
     } finally {
       setLoadingHeatmap(false);
     }
-  };
+  }, []);
+
+  const loadData = useCallback(() => {
+    loadLeaderboard();
+    loadHeatmap();
+  }, [loadLeaderboard, loadHeatmap]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const topTrustScore =
     leaderboard.length > 0
       ? Math.max(...leaderboard.map((item) => item.trust_score || 0))
       : null;
+
+  const isGlobalLoading = loadingLeaderboard && loadingHeatmap;
 
   return (
     <div>
@@ -239,44 +249,33 @@ export default function Dashboard() {
 
       {/* Top Stat Metrics */}
       <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Active Annotators</span>
-            <div className="stat-icon">
-              <Users size={16} />
-            </div>
-          </div>
-          <div className="stat-value">{leaderboardTotal}</div>
-          <div className="stat-subtext">Registered for Project {PROJECT_ID}</div>
-        </div>
+        <StatCard
+          label="Active Annotators"
+          value={leaderboardTotal}
+          icon={Users}
+          subtext={`Registered for Project ${PROJECT_ID}`}
+          loading={loadingLeaderboard}
+        />
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Overall Kappa</span>
-            <div className="stat-icon">
-              <Scale size={16} />
-            </div>
-          </div>
-          <div className="stat-value">
-            {heatmap?.overall_kappa == null
+        <StatCard
+          label="Overall Kappa"
+          value={
+            heatmap?.overall_kappa == null
               ? '—'
-              : heatmap.overall_kappa.toFixed(3)}
-          </div>
-          <div className="stat-subtext">Inter-annotator reliability</div>
-        </div>
+              : heatmap.overall_kappa.toFixed(3)
+          }
+          icon={Scale}
+          subtext="Inter-annotator reliability"
+          loading={loadingHeatmap}
+        />
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Peak Trust Score</span>
-            <div className="stat-icon">
-              <Trophy size={16} />
-            </div>
-          </div>
-          <div className="stat-value">
-            {topTrustScore != null ? formatPercent(topTrustScore) : '—'}
-          </div>
-          <div className="stat-subtext">Top performing annotator</div>
-        </div>
+        <StatCard
+          label="Peak Trust Score"
+          value={topTrustScore != null ? formatPercent(topTrustScore) : '—'}
+          icon={Trophy}
+          subtext="Top performing annotator"
+          loading={loadingLeaderboard}
+        />
       </div>
 
       {/* Leaderboard Card */}
@@ -286,29 +285,24 @@ export default function Dashboard() {
             <h2>Annotator Leaderboard</h2>
             <p>Ranked by aggregate trust score, productivity, and gold benchmark accuracy.</p>
           </div>
-          <span className="badge badge-info">
-            {leaderboardTotal} annotator{leaderboardTotal === 1 ? '' : 's'}
-          </span>
+          {!loadingLeaderboard && !leaderboardError && (
+            <span className="badge badge-info">
+              {leaderboardTotal} annotator{leaderboardTotal === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
 
-        {leaderboardError && (
-          <div className="alert">
-            <span>{leaderboardError}</span>
-          </div>
-        )}
-
-        {loadingLeaderboard ? (
-          <div style={{ padding: '1rem 0' }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
+        {leaderboardError ? (
+          <ErrorState message={leaderboardError} onRetry={loadLeaderboard} />
+        ) : loadingLeaderboard ? (
+          <LoadingState count={4} />
         ) : leaderboard.length === 0 ? (
-          <div className="empty-state">
-            <Users size={24} style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }} />
-            <h3>No Annotator Data</h3>
-            <p>No annotator records found for this project yet.</p>
-          </div>
+          <EmptyState
+            icon={Users}
+            type="neutral"
+            title="No Annotator Data"
+            description="No annotator records found for this project yet."
+          />
         ) : (
           <div className="table-wrapper">
             <table>
@@ -418,26 +412,20 @@ export default function Dashboard() {
             <h2>Inter-Annotator Agreement Matrix</h2>
             <p>Pairwise Cohen&apos;s agreement across overlapping labeled items.</p>
           </div>
-          <div className="topbar-badge-project">
-            <span>Overall Kappa:</span>
-            <strong className="mono-cell" style={{ color: 'var(--text-primary)' }}>
-              {heatmap?.overall_kappa == null ? '—' : heatmap.overall_kappa.toFixed(3)}
-            </strong>
-          </div>
+          {!loadingHeatmap && !heatmapError && (
+            <div className="topbar-badge-project">
+              <span>Overall Kappa:</span>
+              <strong className="mono-cell" style={{ color: 'var(--text-primary)' }}>
+                {heatmap?.overall_kappa == null ? '—' : heatmap.overall_kappa.toFixed(3)}
+              </strong>
+            </div>
+          )}
         </div>
 
-        {heatmapError && (
-          <div className="alert">
-            <span>{heatmapError}</span>
-          </div>
-        )}
-
-        {loadingHeatmap ? (
-          <div style={{ padding: '2rem 0' }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
+        {heatmapError ? (
+          <ErrorState message={heatmapError} onRetry={loadHeatmap} />
+        ) : loadingHeatmap ? (
+          <LoadingState count={3} />
         ) : (
           <AgreementHeatmap data={heatmap} />
         )}

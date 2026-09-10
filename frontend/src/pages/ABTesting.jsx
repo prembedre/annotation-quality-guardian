@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
-import { GitCompare, RefreshCw, Trophy, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { GitCompare, RefreshCw, Trophy, Zap } from 'lucide-react';
+import { ErrorState, EmptyState, LoadingState } from '../components';
 
 function formatPercent(value) {
   if (value === null || value === undefined) return '—';
@@ -51,6 +52,8 @@ function MetricCard({ label, value, isHighlight = false }) {
 }
 
 function VariantPanel({ title, variant, isWinner }) {
+  if (!variant) return null;
+
   return (
     <div
       className="phase4-ab-variant"
@@ -68,24 +71,34 @@ function VariantPanel({ title, variant, isWinner }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <h3>{title}</h3>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            {title}
+          </h3>
           {isWinner && (
-            <span className="badge badge-good" style={{ display: 'inline-flex', gap: '4px' }}>
+            <span className="badge badge-good">
               <Trophy size={11} />
               <span>Recommended</span>
             </span>
           )}
         </div>
-        <span className="mono-cell" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          Variant {title.slice(-1)}
+        <span
+          className="mono-cell"
+          style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}
+        >
+          {variant.sample_size} Samples
         </span>
       </div>
 
-      <div className="phase4-ab-metrics">
+      <div className="phase4-ab-metric-grid">
         <MetricCard
-          label="Accuracy"
-          value={formatPercent(variant.accuracy)}
+          label="Gold Accuracy"
+          value={formatPercent(variant.gold_accuracy)}
           isHighlight={isWinner}
+        />
+
+        <MetricCard
+          label="Gold Correct"
+          value={variant.gold_correct ?? '—'}
         />
 
         <MetricCard
@@ -96,11 +109,6 @@ function VariantPanel({ title, variant, isWinner }) {
         <MetricCard
           label="Gold Annotations"
           value={variant.gold_annotations ?? '—'}
-        />
-
-        <MetricCard
-          label="Gold Correct"
-          value={variant.gold_correct ?? '—'}
         />
 
         <MetricCard
@@ -130,7 +138,7 @@ export default function ABTesting() {
   const [loadingResults, setLoadingResults] = useState(false);
   const [error, setError] = useState('');
 
-  async function loadExperiments() {
+  const loadExperiments = useCallback(async () => {
     try {
       setLoadingExperiments(true);
       setError('');
@@ -153,9 +161,9 @@ export default function ABTesting() {
     } finally {
       setLoadingExperiments(false);
     }
-  }
+  }, []);
 
-  async function loadResults(experimentId) {
+  const loadResults = useCallback(async (experimentId) => {
     if (!experimentId) {
       setResults(null);
       return;
@@ -178,17 +186,17 @@ export default function ABTesting() {
     } finally {
       setLoadingResults(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadExperiments();
-  }, []);
+  }, [loadExperiments]);
 
   useEffect(() => {
     if (selectedExperimentId) {
       loadResults(selectedExperimentId);
     }
-  }, [selectedExperimentId]);
+  }, [selectedExperimentId, loadResults]);
 
   return (
     <div>
@@ -211,148 +219,143 @@ export default function ABTesting() {
         </button>
       </div>
 
-      {error && <div className="alert">{error}</div>}
+      {error && <ErrorState message={error} onRetry={loadExperiments} />}
 
       {/* Experiment Selector Bar */}
-      <div className="card">
-        <div className="card-header" style={{ marginBottom: 0 }}>
-          <div style={{ flex: '1 1 300px' }}>
-            <h2>Select Active Experiment</h2>
-            <p>Choose an experiment run to evaluate variant performance.</p>
-          </div>
-
-          <div style={{ minWidth: '240px' }}>
-            {loadingExperiments ? (
-              <div className="skeleton-row" style={{ height: '38px' }} />
-            ) : experiments.length === 0 ? (
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                No active experiments found.
-              </span>
-            ) : (
-              <select
-                id="ab-experiment"
-                value={selectedExperimentId}
-                onChange={(e) => setSelectedExperimentId(e.target.value)}
-              >
-                {experiments.map((exp) => (
-                  <option key={exp.id} value={exp.id}>
-                    {exp.experiment_name} (ID #{exp.id})
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {loadingExperiments ? (
+      {!error && (
         <div className="card">
-          <div style={{ padding: '2rem 0' }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
-        </div>
-      ) : experiments.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <GitCompare size={26} />
+          <div className="card-header" style={{ marginBottom: 0 }}>
+            <div style={{ flex: '1 1 300px' }}>
+              <h2>Select Active Experiment</h2>
+              <p>Choose an experiment run to evaluate variant performance.</p>
             </div>
-            <h3>No A/B Experiments Created</h3>
-            <p>
-              Compare two annotation prompt variations, UI schema changes, or labeling instructions to determine which produces superior quality data.
-            </p>
+
+            <div style={{ minWidth: '240px' }}>
+              {loadingExperiments ? (
+                <div className="skeleton-row" style={{ height: '38px' }} />
+              ) : experiments.length === 0 ? (
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  No active experiments found.
+                </span>
+              ) : (
+                <select
+                  id="ab-experiment"
+                  value={selectedExperimentId}
+                  onChange={(e) => setSelectedExperimentId(e.target.value)}
+                >
+                  {experiments.map((exp) => (
+                    <option key={exp.id} value={exp.id}>
+                      {exp.experiment_name} (ID #{exp.id})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
         </div>
-      ) : loadingResults ? (
-        <div className="card">
-          <div style={{ padding: '2rem 0' }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
-        </div>
-      ) : results ? (
+      )}
+
+      {!error && (
         <>
-          {/* Side by Side Variants */}
-          <div className="phase4-ab-grid">
-            <VariantPanel
-              title="Variant A"
-              variant={results.variant_a}
-              isWinner={results.recommended_variant === 'Variant A'}
-            />
-
-            <VariantPanel
-              title="Variant B"
-              variant={results.variant_b}
-              isWinner={results.recommended_variant === 'Variant B'}
-            />
-          </div>
-
-          {/* Recommendation Banner */}
-          <div className="card">
-            <div className="card-header">
-              <div>
-                <h2>Engine Recommendation</h2>
-                <p>
-                  Statistical comparison based on gold-standard accuracy and annotator consensus.
-                </p>
-              </div>
-              <span className="badge badge-info">{results.status}</span>
+          {loadingExperiments ? (
+            <div className="card">
+              <LoadingState count={3} />
             </div>
-
-            <div className="phase4-recommendation">
-              <div>
-                <div className="phase4-recommendation-label">Winner Variant</div>
-                <div
-                  className="phase4-recommendation-value"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                >
-                  <Trophy size={20} style={{ color: 'var(--status-good-solid)' }} />
-                  <span>{results.recommended_variant || 'Inconclusive'}</span>
-                </div>
-              </div>
-
-              <div>
-                <div className="phase4-recommendation-label">Accuracy Delta</div>
-                <div className="phase4-recommendation-value">
-                  +{formatPercent(results.accuracy_difference)}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: 'var(--bg-surface)',
-                  padding: '1rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    color: 'var(--accent-300)',
-                    marginBottom: '0.35rem',
-                  }}
-                >
-                  <Zap size={13} />
-                  <span>Decision Rationale</span>
-                </div>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                  {results.recommendation_reason ||
-                    'Sufficient statistical significance has not yet been achieved.'}
-                </p>
-              </div>
+          ) : experiments.length === 0 ? (
+            <div className="card">
+              <EmptyState
+                icon={GitCompare}
+                type="neutral"
+                title="No A/B Experiments Created"
+                description="Compare two annotation prompt variations, UI schema changes, or labeling instructions to determine which produces superior quality data."
+              />
             </div>
-          </div>
+          ) : loadingResults ? (
+            <div className="card">
+              <LoadingState count={3} />
+            </div>
+          ) : results ? (
+            <>
+              {/* Side by Side Variants */}
+              <div className="phase4-ab-grid">
+                <VariantPanel
+                  title="Variant A"
+                  variant={results.variant_a}
+                  isWinner={results.recommended_variant === 'Variant A'}
+                />
+
+                <VariantPanel
+                  title="Variant B"
+                  variant={results.variant_b}
+                  isWinner={results.recommended_variant === 'Variant B'}
+                />
+              </div>
+
+              {/* Recommendation Banner */}
+              <div className="card">
+                <div className="card-header">
+                  <div>
+                    <h2>Engine Recommendation</h2>
+                    <p>
+                      Statistical comparison based on gold-standard accuracy and annotator consensus.
+                    </p>
+                  </div>
+                  <span className="badge badge-info">{results.status}</span>
+                </div>
+
+                <div className="phase4-recommendation">
+                  <div>
+                    <div className="phase4-recommendation-label">Winner Variant</div>
+                    <div
+                      className="phase4-recommendation-value"
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      <Trophy size={20} style={{ color: 'var(--status-good-solid)' }} />
+                      <span>{results.recommended_variant || 'Inconclusive'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="phase4-recommendation-label">Accuracy Delta</div>
+                    <div className="phase4-recommendation-value">
+                      +{formatPercent(results.accuracy_difference)}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      background: 'var(--bg-surface)',
+                      padding: '1rem',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        color: 'var(--accent-600)',
+                        marginBottom: '0.35rem',
+                      }}
+                    >
+                      <Zap size={13} />
+                      <span>Decision Rationale</span>
+                    </div>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      {results.recommendation_reason ||
+                        'Sufficient statistical significance has not yet been achieved.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
     </div>
   );
 }

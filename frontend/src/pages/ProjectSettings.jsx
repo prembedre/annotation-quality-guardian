@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
-import { Sliders, RotateCcw, Save, CheckCircle2, AlertOctagon, HelpCircle } from 'lucide-react';
+import { Sliders, RotateCcw, Save, CheckCircle2 } from 'lucide-react';
+import { ErrorState, LoadingState } from '../components';
 
 const PROJECT_ID = 1;
 
@@ -72,7 +73,7 @@ function CustomSlider({
 
       <div className="slider-range">
         <span>{min}{unit === '%' ? '%' : ''}</span>
-        <span style={{ color: 'var(--accent-300)' }}>Current: {displayValue}</span>
+        <span style={{ color: 'var(--accent-400)' }}>Current: {displayValue}</span>
         <span>{max}{unit === '%' ? '%' : ''}</span>
       </div>
     </div>
@@ -89,33 +90,33 @@ export default function ProjectSettings() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        setLoading(true);
-        setError('');
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-        const response = await api.get(`/projects/${PROJECT_ID}/settings`);
+      const response = await api.get(`/projects/${PROJECT_ID}/settings`);
 
-        const loadedSettings = {
-          gold_threshold: response.data.gold_threshold ?? DEFAULT_SETTINGS.gold_threshold,
-          kappa_threshold: response.data.kappa_threshold ?? DEFAULT_SETTINGS.kappa_threshold,
-          behavior_threshold: response.data.behavior_threshold ?? DEFAULT_SETTINGS.behavior_threshold,
-          embedding_threshold: response.data.embedding_threshold ?? DEFAULT_SETTINGS.embedding_threshold,
-        };
+      const loadedSettings = {
+        gold_threshold: response.data.gold_threshold ?? DEFAULT_SETTINGS.gold_threshold,
+        kappa_threshold: response.data.kappa_threshold ?? DEFAULT_SETTINGS.kappa_threshold,
+        behavior_threshold: response.data.behavior_threshold ?? DEFAULT_SETTINGS.behavior_threshold,
+        embedding_threshold: response.data.embedding_threshold ?? DEFAULT_SETTINGS.embedding_threshold,
+      };
 
-        setSettings(loadedSettings);
-        setSavedSettings(loadedSettings);
-      } catch (err) {
-        console.error('Failed to load project settings:', err);
-        setError(err.response?.data?.detail || 'Failed to load project settings.');
-      } finally {
-        setLoading(false);
-      }
+      setSettings(loadedSettings);
+      setSavedSettings(loadedSettings);
+    } catch (err) {
+      console.error('Failed to load project settings:', err);
+      setError(err.response?.data?.detail || 'Failed to load project settings.');
+    } finally {
+      setLoading(false);
     }
-
-    loadSettings();
   }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   function handleChange(name, value) {
     setSettings((current) => ({
@@ -171,26 +172,6 @@ export default function ProjectSettings() {
     settings.behavior_threshold !== savedSettings.behavior_threshold ||
     settings.embedding_threshold !== savedSettings.embedding_threshold;
 
-  if (loading) {
-    return (
-      <div>
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">Project Settings</h1>
-            <p className="page-subtitle">Configure quality thresholds for annotation review.</p>
-          </div>
-        </div>
-        <div className="card">
-          <div style={{ padding: '2rem 0' }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="page-header">
@@ -214,16 +195,15 @@ export default function ProjectSettings() {
         </div>
       )}
 
-      {error && (
-        <div className="alert">
-          <AlertOctagon size={16} />
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <ErrorState message={error} onRetry={loadSettings} />}
 
-      {/* Unified Settings Panel */}
-      <div className="card">
-        <div className="card-header">
+      {loading ? (
+        <div className="card">
+          <LoadingState count={4} />
+        </div>
+      ) : (
+        <div className="card">
+          <div className="card-header">
           <div>
             <h2>Quality Threshold Triggers</h2>
             <p>
@@ -318,6 +298,7 @@ export default function ProjectSettings() {
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

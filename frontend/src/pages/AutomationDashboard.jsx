@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   assignReroute,
   fetchPendingReroutes,
@@ -7,13 +7,13 @@ import {
   Bot,
   Clock,
   CheckCircle2,
-  AlertOctagon,
   RefreshCw,
   UserCheck,
   X,
   Send,
   Sparkles,
 } from 'lucide-react';
+import { ErrorState, EmptyState, StatCard, LoadingState } from '../components';
 
 function AutomationDashboard() {
   const [reroutes, setReroutes] = useState([]);
@@ -28,7 +28,7 @@ function AutomationDashboard() {
   const [annotatorId, setAnnotatorId] = useState('');
   const [reason, setReason] = useState('');
 
-  async function loadReroutes() {
+  const loadReroutes = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -43,11 +43,11 @@ function AutomationDashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadReroutes();
-  }, []);
+  }, [loadReroutes]);
 
   function openAssignModal(item) {
     setActiveItem(item);
@@ -118,12 +118,7 @@ function AutomationDashboard() {
         </button>
       </div>
 
-      {error && (
-        <div className="alert">
-          <AlertOctagon size={16} />
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <ErrorState message={error} onRetry={loadReroutes} />}
 
       {success && (
         <div className="alert-success">
@@ -134,157 +129,151 @@ function AutomationDashboard() {
 
       {/* Top Stat Summary Tiles */}
       <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Pending Reroutes</span>
-            <div className="stat-icon" style={{ background: 'var(--status-risk-bg)', color: 'var(--status-risk-text)' }}>
-              <Clock size={16} />
-            </div>
-          </div>
-          <div className="stat-value">{total}</div>
-          <div className="stat-subtext">Tasks awaiting re-labeling assignment</div>
-        </div>
+        <StatCard
+          label="Pending Reroutes"
+          value={total}
+          icon={Clock}
+          subtext="Tasks awaiting re-labeling assignment"
+          statusLabel={total > 0 ? `${total} Pending` : 'All Clear'}
+          statusType={total > 0 ? 'risk' : 'good'}
+          loading={loading}
+        />
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span className="stat-label">Automation Engine</span>
-            <div className="stat-icon">
-              <Bot size={16} />
-            </div>
-          </div>
-          <div className="stat-value" style={{ fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="project-status-dot" />
-            <span>Active</span>
-          </div>
-          <div className="stat-subtext">
-            <span className="badge badge-good">Realtime Monitoring</span>
-          </div>
-        </div>
+        <StatCard
+          label="Automation Engine"
+          value="Active"
+          icon={Bot}
+          subtext="Realtime Monitoring Enabled"
+          statusLabel="Healthy"
+          statusType="good"
+          loading={loading}
+        />
       </div>
 
-      {/* Tasks Table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div className="card-header" style={{ marginBottom: 0 }}>
-            <div>
-              <h2>Flagged Reroute Queue</h2>
-              <p>Items flagged by scoring signals awaiting expert annotator reassignment.</p>
+      {/* Pending Tasks Queue Table */}
+      {!error && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div className="card-header" style={{ marginBottom: 0 }}>
+              <div>
+                <h2>Pending Rerouted Items</h2>
+                <p>Anomalous annotations flagged below threshold pending senior re-labeling assignment.</p>
+              </div>
+              {!loading && (
+                <span className="badge badge-risk">{total} Pending</span>
+              )}
             </div>
-            <span className="badge badge-info">{total} pending</span>
           </div>
-        </div>
 
-        {loading ? (
-          <div style={{ padding: '1.5rem' }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="skeleton-row" />
-            ))}
-          </div>
-        ) : reroutes.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon" style={{ background: 'var(--status-good-bg)', color: 'var(--status-good-text)' }}>
-              <CheckCircle2 size={26} />
+          {loading ? (
+            <div style={{ padding: '1.5rem' }}>
+              <LoadingState count={3} />
             </div>
-            <h3>Zero Pending Reroutes</h3>
-            <p>All flagged items have been reassigned or resolved. The queue is completely clear.</p>
-          </div>
-        ) : (
-          <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Item ID</th>
-                  <th>Original Annotator</th>
-                  <th>Trust Score</th>
-                  <th>Flag Rationale</th>
-                  <th>Annotation Content</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right', paddingRight: '1.5rem' }}>Action</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {reroutes.map((item) => (
-                  <tr key={item.item_id}>
-                    <td>
-                      <span className="mono-cell" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        #{item.item_id}
-                      </span>
-                      <div
-                        className="mono-cell"
-                        style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}
-                      >
-                        {item.external_id || 'Internal item'}
-                      </div>
-                    </td>
-
-                    <td>
-                      <strong>
-                        {item.original_annotator_name || `Annotator ${item.original_annotator_id}`}
-                      </strong>
-                      <div
-                        className="mono-cell"
-                        style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}
-                      >
-                        ID #{item.original_annotator_id}
-                      </div>
-                    </td>
-
-                    <td>
-                      <span className="badge badge-risk mono-cell">
-                        {(Number(item.trust_score || 0) * 100).toFixed(1)}%
-                      </span>
-                    </td>
-
-                    <td>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>
-                        {item.reason || 'Anomalous score below threshold'}
-                      </span>
-                    </td>
-
-                    <td style={{ maxWidth: '280px' }}>
-                      <div
-                        style={{
-                          fontSize: '0.78rem',
-                          color: 'var(--text-secondary)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          fontFamily: 'var(--font-mono)',
-                          background: 'var(--bg-subtle)',
-                          padding: '3px 6px',
-                          borderRadius: 'var(--radius-sm)',
-                        }}
-                        title={item.content?.text || JSON.stringify(item.content)}
-                      >
-                        {item.content?.text || JSON.stringify(item.content)}
-                      </div>
-                    </td>
-
-                    <td>
-                      <span className="badge badge-medium">
-                        {item.reroute_status || 'PENDING'}
-                      </span>
-                    </td>
-
-                    <td style={{ textAlign: 'right', paddingRight: '1.5rem' }}>
-                      <button
-                        type="button"
-                        className="primary-btn"
-                        onClick={() => openAssignModal(item)}
-                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
-                      >
-                        <UserCheck size={13} />
-                        <span>Reassign</span>
-                      </button>
-                    </td>
+          ) : reroutes.length === 0 ? (
+            <EmptyState
+              icon={CheckCircle2}
+              type="success"
+              title="Zero Pending Reroutes"
+              description="No low-trust or anomalous annotations currently require rerouting. All queues are running smoothly."
+            />
+          ) : (
+            <div className="table-wrapper" style={{ border: 'none', borderRadius: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item ID</th>
+                    <th>Original Annotator</th>
+                    <th>Trust Score</th>
+                    <th>Reason</th>
+                    <th>Annotation Content</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right', paddingRight: '1.5rem' }}>Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+
+                <tbody>
+                  {reroutes.map((item) => (
+                    <tr key={item.item_id}>
+                      <td>
+                        <span className="mono-cell" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          #{item.item_id}
+                        </span>
+                        <div
+                          className="mono-cell"
+                          style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}
+                        >
+                          {item.external_id || 'Internal item'}
+                        </div>
+                      </td>
+
+                      <td>
+                        <strong>
+                          {item.original_annotator_name || `Annotator ${item.original_annotator_id}`}
+                        </strong>
+                        <div
+                          className="mono-cell"
+                          style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}
+                        >
+                          ID #{item.original_annotator_id}
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className="badge badge-risk mono-cell">
+                          {(Number(item.trust_score || 0) * 100).toFixed(1)}%
+                        </span>
+                      </td>
+
+                      <td>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>
+                          {item.reason || 'Anomalous score below threshold'}
+                        </span>
+                      </td>
+
+                      <td style={{ maxWidth: '280px' }}>
+                        <div
+                          style={{
+                            fontSize: '0.78rem',
+                            color: 'var(--text-secondary)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            fontFamily: 'var(--font-mono)',
+                            background: 'var(--bg-subtle)',
+                            padding: '3px 6px',
+                            borderRadius: 'var(--radius-sm)',
+                          }}
+                          title={item.content?.text || JSON.stringify(item.content)}
+                        >
+                          {item.content?.text || JSON.stringify(item.content)}
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className="badge badge-medium">
+                          {item.reroute_status || 'PENDING'}
+                        </span>
+                      </td>
+
+                      <td style={{ textAlign: 'right', paddingRight: '1.5rem' }}>
+                        <button
+                          type="button"
+                          className="primary-btn"
+                          onClick={() => openAssignModal(item)}
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                        >
+                          <UserCheck size={13} />
+                          <span>Reassign</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Clean Reassignment Modal */}
       {activeItem && (
