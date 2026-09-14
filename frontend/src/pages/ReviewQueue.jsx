@@ -1,16 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ReviewQueueHeader } from '../components/ReviewQueueHeader';
+import { PageHeader } from '../components/PageHeader';
 import { ReviewQueueFilters } from '../components/ReviewQueueFilters';
 import { ReviewQueueTable } from '../components/ReviewQueueTable';
 import { Pagination } from '../components/Pagination';
 import { DatasetExport } from '../components/DatasetExport';
-import { ErrorState } from '../components/States';
-import { Toast } from '../components/Toast';
+import { ErrorState, EmptyState, LoadingState } from '../components/States';
+import { useToast } from '../components/ToastContext';
 import {
   getReviewQueue,
   exportReviewQueue,
   resolveReviewItem,
 } from '../services/reviewQueueService';
+import { CheckSquare, RefreshCw } from 'lucide-react';
 
 export default function ReviewQueue() {
   const [queueData, setQueueData] = useState([]);
@@ -23,14 +24,11 @@ export default function ReviewQueue() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState('success');
+  const [density, setDensity] = useState('comfortable');
 
+  const { success, error: toastError } = useToast();
   const currentProjectId = 1;
 
-  /**
-   * Fetch review queue data
-   */
   const fetchQueue = useCallback(
     async (
       currentPage = 1,
@@ -53,7 +51,6 @@ export default function ReviewQueue() {
         });
 
         const { data, pagination } = result;
-
         setQueueData(data || []);
         setTotal(pagination?.total || 0);
         setTotalPages(pagination?.totalPages || 1);
@@ -99,129 +96,153 @@ export default function ReviewQueue() {
     setPage(1);
   }, []);
 
-  const handleStatusChange = useCallback((value) => {
-    setStatusFilter(value);
-    setPage(1);
-  }, []);
-
-  const handleRiskChange = useCallback((value) => {
-    setRiskFilter(value);
-    setPage(1);
-  }, []);
-
   const handleClearFilters = useCallback(() => {
     setSearch('');
     setStatusFilter('all');
     setRiskFilter('all');
     setPage(1);
-    fetchQueue(1, pageSize, 'all', '', 'all');
-  }, [pageSize, fetchQueue]);
-
-  const handleResolve = useCallback(
-    async (itemId, payload) => {
-      try {
-        setToastMessage('');
-        const result = await resolveReviewItem(itemId, payload);
-        setToastType('success');
-        setToastMessage(result?.message || 'Review item resolved successfully.');
-
-        await fetchQueue(page, pageSize, statusFilter, search, riskFilter);
-      } catch (resolveError) {
-        console.error('Failed to resolve review item:', resolveError);
-        setToastType('error');
-        setToastMessage(
-          resolveError.response?.data?.detail ||
-            resolveError.message ||
-            'Failed to resolve review item.'
-        );
-      }
-    },
-    [fetchQueue, page, pageSize, statusFilter, search, riskFilter]
-  );
+  }, []);
 
   const handleExport = useCallback(
-    async (format) => {
+    async (format, scope) => {
       try {
-        const blob = await exportReviewQueue(currentProjectId, format);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `aqg-project-${currentProjectId}.${format}`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-
-        setToastType('success');
-        setToastMessage(`Dataset exported as ${format.toUpperCase()} successfully!`);
-      } catch (exportError) {
-        setToastType('error');
-        setToastMessage(
-          exportError.message || `Failed to export as ${format.toUpperCase()}.`
-        );
+        await exportReviewQueue(format, {
+          status: scope === 'flagged' ? 'flagged' : statusFilter,
+          search,
+          riskFilter,
+          projectId: currentProjectId,
+        });
+        success(`Successfully generated ${format.toUpperCase()} export!`);
+      } catch (exportErr) {
+        console.error('Export failed:', exportErr);
+        toastError('Failed to export dataset. Please try again.');
       }
     },
-    [currentProjectId]
+    [statusFilter, search, riskFilter, currentProjectId, success, toastError]
   );
 
-  const handleRetry = useCallback(() => {
-    fetchQueue(page, pageSize, statusFilter, search, riskFilter);
-  }, [page, pageSize, statusFilter, search, riskFilter, fetchQueue]);
+  const handleResolve = useCallback(
+    async (itemId, resolution) => {
+      try {
+        await resolveReviewItem(itemId, resolution);
+        const actionLabel =
+          resolution.action === 'confirm'
+            ? 'confirmed'
+            : resolution.action === 'correct'
+            ? 'corrected'
+            : 'escalated';
+
+        success(`Item #${itemId} successfully ${actionLabel}!`);
+        await fetchQueue(page, pageSize, statusFilter, search, riskFilter);
+      } catch (actionErr) {
+        console.error('Resolution failed:', actionErr);
+        toastError(actionErr.message || `Failed to update item #${itemId}.`);
+        throw actionErr;
+      }
+    },
+    [fetchQueue, page, pageSize, statusFilter, search, riskFilter, success, toastError]
+  );
 
   return (
     <div>
-      {/* Header with integrated export action */}
-      <div className="page-header">
-        <ReviewQueueHeader />
+      {/* Standard Page Header */}
+      <PageHeader
+        eyebrow="Data-Grid Observability"
+        title="Review Queue"
+        subtitle="Active flagged annotations, dispute triage, and auditor escalation actions."
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => fetchQueue(page, pageSize, statusFilter, search, riskFilter)}
+              disabled={loading}
+            >
+              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+              <span>Refresh</span>
+            </button>
 
-        <div className="export-actions">
-          <DatasetExport onExport={handleExport} disabled={loading} />
-        </div>
-      </div>
+            <DatasetExport
+              onExport={handleExport}
+              disabled={loading || total === 0}
+              totalCount={total}
+              flaggedCount={queueData.filter((i) => i.flagged).length}
+            />
+          </div>
+        }
+      />
 
-      {/* Compact Horizontal Filter Bar */}
+      {error && (
+        <ErrorState
+          message={error}
+          onRetry={() => fetchQueue(page, pageSize, statusFilter, search, riskFilter)}
+        />
+      )}
+
+      {/* Advanced Filter Toolbar with Density and Saved Views */}
       <ReviewQueueFilters
         search={search}
         onSearchChange={handleSearchChange}
         statusFilter={statusFilter}
-        onStatusChange={handleStatusChange}
+        onStatusChange={setStatusFilter}
         riskFilter={riskFilter}
-        onRiskChange={handleRiskChange}
+        onRiskChange={setRiskFilter}
         pageSize={pageSize}
         onPageSizeChange={handlePageSizeChange}
         onClearFilters={handleClearFilters}
+        density={density}
+        onDensityChange={setDensity}
       />
 
-      {error ? (
-        <ErrorState message={error} onRetry={handleRetry} />
-      ) : (
-        /* Dense Results Table */
-        <ReviewQueueTable
-          items={queueData}
-          loading={loading}
-          onResolve={handleResolve}
-        />
-      )}
+      {/* Main Review Queue Table Card */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: '1.5rem' }}>
+            <LoadingState count={5} />
+          </div>
+        ) : queueData.length === 0 ? (
+          <div style={{ padding: '2rem' }}>
+            <EmptyState
+              icon={CheckSquare}
+              title="All Items Caught Up"
+              description="No annotation items match your current review criteria or need resolution."
+            />
+          </div>
+        ) : (
+          <>
+            <ReviewQueueTable
+              items={queueData}
+              loading={loading}
+              onResolve={handleResolve}
+              density={density}
+            />
 
-      {/* Pagination */}
-      {!loading && !error && queueData.length > 0 && (
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          totalRecords={total}
-          pageSize={pageSize}
-          onPageChange={handlePageChange}
-          disabled={loading}
-        />
-      )}
+            {/* Pagination Controls */}
+            <div
+              style={{
+                padding: '0.75rem 1rem',
+                borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Showing <strong className="font-mono">{queueData.length}</strong> of{' '}
+                <strong className="font-mono">{total}</strong> total review records
+              </span>
 
-      {/* Toast Feedback */}
-      <Toast
-        message={toastMessage}
-        type={toastType}
-        onClose={() => setToastMessage('')}
-        duration={4000}
-      />
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                disabled={loading}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
