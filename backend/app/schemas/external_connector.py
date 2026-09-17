@@ -46,6 +46,9 @@ class ConnectorResponseSchema(BaseModel):
     status: str
     read_only: bool = True
     query_config: Dict[str, Any] = Field(default_factory=dict)
+    last_sync_at: Optional[datetime] = None
+    synced_rows_count: int = 0
+    last_tested_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -59,11 +62,13 @@ class ConnectorListResponse(BaseModel):
 class ConnectorTestResponseSchema(BaseModel):
     """Response returned after testing connection."""
     success: bool
+    status: str  # "success" or "error" — derived from success bool for frontend compatibility
     connector_id: Optional[int] = None
     connection_name: Optional[str] = None
     database_type: Optional[str] = None
     latency_ms: Optional[float] = None
     message: str
+    error_type: Optional[str] = None  # e.g. "connection_refused", "auth_failed", "timeout", "unknown_host"
     read_only_verified: bool = True
 
 
@@ -84,4 +89,5 @@ class ConnectorSyncResponseSchema(BaseModel):
     inserted_records: int
     duplicate_records: int
     failed_records: int
+    synced_rows: Optional[int] = None  # alias of inserted_records for frontend compatibility
     message: str

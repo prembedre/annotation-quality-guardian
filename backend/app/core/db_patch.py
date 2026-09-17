@@ -90,6 +90,22 @@ def ensure_schema_compatibility(engine: Engine) -> None:
                     )
                     conn.commit()
 
+            # 5. external_db_connectors table — add telemetry columns
+            if "external_db_connectors" in table_names:
+                ec_cols = {col["name"] for col in inspector.get_columns("external_db_connectors")}
+                ec_patches = [
+                    ("last_sync_at", "DATETIME"),
+                    ("last_tested_at", "DATETIME"),
+                    ("synced_rows_count", "INTEGER NOT NULL DEFAULT 0"),
+                ]
+                for col_name, col_type in ec_patches:
+                    if col_name not in ec_cols:
+                        logger.info("Adding missing '%s' column to external_db_connectors table", col_name)
+                        conn.execute(
+                            text(f"ALTER TABLE external_db_connectors ADD COLUMN {col_name} {col_type}")
+                        )
+                        conn.commit()
+
             logger.info("Database schema compatibility verified successfully.")
     except Exception as exc:
         logger.warning("Database schema patch notice: %s", exc)

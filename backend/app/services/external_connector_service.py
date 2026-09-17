@@ -6,7 +6,10 @@ Provides read-only database connections, testing, security checks, and annotatio
 import base64
 import re
 import time
-from typing import Dict, Any, List, Optional
+import socket
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Tuple
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
@@ -23,28 +26,68 @@ from app.services.ingestion_service import ingest_records_batch
 from app.services.trust_score_service import compute_and_save_item_trust_score
 
 
+# ── Encryption helpers ──────────────────────────────────────────────────────
+
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+    import os
+
+    _FERNET_KEY_ENV = os.environ.get("CONNECTOR_SECRET_KEY", "")
+    # Derive a valid 32-byte URL-safe base64-encoded key even if the env var is short.
+    if _FERNET_KEY_ENV:
+        _key_bytes = (_FERNET_KEY_ENV * 32)[:32].encode("utf-8")
+        _FERNET_KEY = base64.urlsafe_b64encode(_key_bytes)
+    else:
+        # Generate a stable default key based on a fixed seed for dev (NOT for production).
+        _key_bytes = b"aqg-connector-secret-key-default"[:32]
+        _FERNET_KEY = base64.urlsafe_b64encode(_key_bytes)
+
+    _fernet = Fernet(_FERNET_KEY)
+    _FERNET_AVAILABLE = True
+except ImportError:
+    _FERNET_AVAILABLE = False
+    _fernet = None
+
+
+def _encrypt_secret(plain_text: Optional[str]) -> Optional[str]:
+    """Encrypt secret string using Fernet symmetric encryption (falls back to base64)."""
+    if not plain_text:
+        return None
+    if _FERNET_AVAILABLE and _fernet:
+        return _fernet.encrypt(plain_text.encode("utf-8")).decode("utf-8")
+    # Fallback: base64 obfuscation (not secure — install cryptography package)
+    return "b64:" + base64.b64encode(plain_text.encode("utf-8")).decode("utf-8")
+
+
+def _decrypt_secret(cipher_text: Optional[str]) -> Optional[str]:
+    """Decrypt stored secret (Fernet or base64 fallback)."""
+    if not cipher_text:
+        return None
+    # Detect legacy base64 or new Fernet token
+    if cipher_text.startswith("b64:"):
+        try:
+            return base64.b64decode(cipher_text[4:].encode("utf-8")).decode("utf-8")
+        except Exception:
+            return cipher_text
+    if _FERNET_AVAILABLE and _fernet:
+        try:
+            return _fernet.decrypt(cipher_text.encode("utf-8")).decode("utf-8")
+        except Exception:
+            pass
+    # Last-resort: try plain base64 (for records created before Fernet was added)
+    try:
+        return base64.b64decode(cipher_text.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return cipher_text
+
+
+# ── SQL validation ──────────────────────────────────────────────────────────
+
 # Regex detecting any destructive or state-modifying SQL statements
 FORBIDDEN_SQL_PATTERN = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|EXEC|EXECUTE|CREATE|RENAME|GRANT|REVOKE|REPLACE|MERGE)\b",
     re.IGNORECASE,
 )
-
-
-def _encrypt_secret(plain_text: Optional[str]) -> Optional[str]:
-    """Obfuscate/encrypt secret string for storage."""
-    if not plain_text:
-        return None
-    return base64.b64encode(plain_text.encode("utf-8")).decode("utf-8")
-
-
-def _decrypt_secret(cipher_text: Optional[str]) -> Optional[str]:
-    """Decrypt/de-obfuscate stored secret."""
-    if not cipher_text:
-        return None
-    try:
-        return base64.b64decode(cipher_text.encode("utf-8")).decode("utf-8")
-    except Exception:
-        return cipher_text
 
 
 def validate_read_only_query(query: str) -> None:
@@ -60,6 +103,8 @@ def validate_read_only_query(query: str) -> None:
         raise ValueError("Forbidden mutation or administrative keyword detected. Read-only access enforced.")
 
 
+# ── Connection URI builder ──────────────────────────────────────────────────
+
 def build_connection_uri(
     database_type: str,
     database_name: str,
@@ -72,7 +117,6 @@ def build_connection_uri(
     db_type = database_type.lower().strip()
 
     if db_type == "sqlite":
-        # SQLite read-only connection URI
         if database_name.startswith("sqlite://"):
             return database_name
         return f"sqlite:///{database_name}"
@@ -94,6 +138,76 @@ def build_connection_uri(
     else:
         raise ValueError(f"Unsupported database type '{database_type}'. Supported: postgresql, sqlite, mysql.")
 
+
+# ── Error classifier ────────────────────────────────────────────────────────
+
+def _classify_connection_error(exc: Exception, host: Optional[str], port: Optional[int], db_type: str) -> Tuple[str, str]:
+    """
+    Classify a connection exception into a human-readable message and an error_type code.
+    Returns (message, error_type).
+    """
+    err_str = str(exc).lower()
+    original = str(exc)
+
+    # Connection refused / unreachable host
+    if any(k in err_str for k in ("connection refused", "connection reset", "econnrefused", "111")):
+        host_str = f"{host}:{port}" if host and port else (host or "the server")
+        return (
+            f"Connection refused — nothing is listening on {host_str}. "
+            f"Check that the {db_type.upper()} server is running and the host/port are correct.",
+            "connection_refused",
+        )
+
+    # Unknown host / DNS resolution failure
+    if any(k in err_str for k in ("name or service not known", "nodename nor servname", "getaddrinfo", "could not translate host", "name resolution")):
+        return (
+            f"Unknown host '{host}' — DNS resolution failed. "
+            "Verify the hostname is correct and reachable from this server.",
+            "unknown_host",
+        )
+
+    # Authentication / credentials failure
+    if any(k in err_str for k in ("password authentication failed", "access denied", "authentication failed", "invalid password", "peer authentication")):
+        return (
+            f"Authentication failed for user '{exc}'. "
+            "Check the username and password.",
+            "auth_failed",
+        )
+    # Narrow auth check without 'exc' confusion
+    if "auth" in err_str and ("fail" in err_str or "denied" in err_str):
+        return (
+            "Authentication failed — check the username and password.",
+            "auth_failed",
+        )
+
+    # Timeout
+    if any(k in err_str for k in ("timeout", "timed out", "connection timed")):
+        host_str = f"{host}:{port}" if host and port else (host or "the server")
+        return (
+            f"Connection timed out connecting to {host_str}. "
+            "The host is unreachable or blocked by a firewall.",
+            "timeout",
+        )
+
+    # Database does not exist
+    if any(k in err_str for k in ("does not exist", "unknown database", "database", "catalog")):
+        return (
+            f"Database not found — no database named at the given host.",
+            "database_not_found",
+        )
+
+    # SSL errors
+    if "ssl" in err_str:
+        return (
+            f"SSL/TLS error: {original[:200]}",
+            "ssl_error",
+        )
+
+    # Generic fallback
+    return (f"Connection failed: {original[:300]}", "unknown")
+
+
+# ── CRUD operations ─────────────────────────────────────────────────────────
 
 def create_connector(
     db: Session,
@@ -120,9 +234,51 @@ def create_connector(
         status=payload.status or "active",
         read_only=True,
         query_config=payload.query_config or {},
+        synced_rows_count=0,
     )
 
     db.add(connector)
+    db.commit()
+    db.refresh(connector)
+    return connector
+
+
+def update_connector(
+    db: Session,
+    connector_id: int,
+    payload: ConnectorUpdateSchema,
+) -> Optional[ExternalDBConnector]:
+    """Update an existing external DB connector's configuration."""
+    connector = get_connector(db, connector_id)
+    if not connector:
+        return None
+
+    if payload.connection_name is not None:
+        # Ensure no collision with another connector
+        collision = db.query(ExternalDBConnector).filter(
+            ExternalDBConnector.connection_name == payload.connection_name,
+            ExternalDBConnector.id != connector_id,
+        ).first()
+        if collision:
+            raise ValueError(f"A connector named '{payload.connection_name}' already exists.")
+        connector.connection_name = payload.connection_name.strip()
+
+    if payload.host is not None:
+        connector.host = payload.host.strip() or None
+    if payload.port is not None:
+        connector.port = payload.port
+    if payload.database_name is not None:
+        connector.database_name = payload.database_name.strip()
+    if payload.username is not None:
+        connector.username = payload.username.strip() or None
+    if payload.password is not None and payload.password.strip():
+        connector.password_encrypted = _encrypt_secret(payload.password)
+    if payload.status is not None:
+        connector.status = payload.status
+    if payload.query_config is not None:
+        connector.query_config = payload.query_config
+
+    connector.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(connector)
     return connector
@@ -160,6 +316,85 @@ def delete_connector(
     return True
 
 
+# ── Connection test ─────────────────────────────────────────────────────────
+
+def _do_live_test(
+    database_type: str,
+    database_name: str,
+    host: Optional[str],
+    port: Optional[int],
+    username: Optional[str],
+    raw_password: Optional[str],
+) -> ConnectorTestResponseSchema:
+    """
+    Perform a live SELECT 1 ping against the target database.
+    Returns a ConnectorTestResponseSchema (without connector_id/connection_name set).
+    Raises no exceptions — all errors are captured and classified.
+    """
+    try:
+        uri = build_connection_uri(
+            database_type=database_type,
+            database_name=database_name,
+            host=host,
+            port=port,
+            username=username,
+            password=raw_password,
+        )
+    except ValueError as exc:
+        return ConnectorTestResponseSchema(
+            success=False,
+            status="error",
+            latency_ms=None,
+            message=str(exc),
+            error_type="config_error",
+        )
+
+    connect_args = {}
+    if database_type == "postgresql":
+        connect_args["connect_timeout"] = 5
+    elif database_type == "sqlite":
+        connect_args["check_same_thread"] = False
+    elif database_type == "mysql":
+        connect_args["connect_timeout"] = 5
+
+    start_time = time.perf_counter()
+
+    try:
+        engine = create_engine(
+            uri,
+            connect_args=connect_args,
+            execution_options={"isolation_level": "AUTOCOMMIT"},
+            pool_pre_ping=True,
+        )
+
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        engine.dispose()
+
+        return ConnectorTestResponseSchema(
+            success=True,
+            status="success",
+            latency_ms=elapsed_ms,
+            message=f"Successfully connected and verified read access in {elapsed_ms}ms.",
+            error_type=None,
+            read_only_verified=True,
+        )
+
+    except Exception as exc:
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        message, error_type = _classify_connection_error(exc, host, port, database_type)
+        return ConnectorTestResponseSchema(
+            success=False,
+            status="error",
+            latency_ms=elapsed_ms,
+            message=message,
+            error_type=error_type,
+            read_only_verified=False,
+        )
+
+
 def test_connection(
     db: Session,
     connector_id: int,
@@ -170,58 +405,29 @@ def test_connection(
         raise ValueError(f"Connector ID {connector_id} not found.")
 
     raw_password = _decrypt_secret(connector.password_encrypted)
-    uri = build_connection_uri(
+    result = _do_live_test(
         database_type=connector.database_type,
         database_name=connector.database_name,
         host=connector.host,
         port=connector.port,
         username=connector.username,
-        password=raw_password,
+        raw_password=raw_password,
     )
 
-    start_time = time.perf_counter()
+    # Stamp the test timestamp regardless of outcome
+    connector.last_tested_at = datetime.utcnow()
+    # Update connector status to reflect last known test result
+    connector.status = "active" if result.success else "error"
+    db.commit()
+    db.refresh(connector)
 
-    try:
-        connect_args = {}
-        if connector.database_type == "postgresql":
-            connect_args["connect_timeout"] = 5
-        elif connector.database_type == "sqlite":
-            connect_args["check_same_thread"] = False
+    result.connector_id = connector.id
+    result.connection_name = connector.connection_name
+    result.database_type = connector.database_type
+    return result
 
-        engine = create_engine(
-            uri,
-            connect_args=connect_args,
-            execution_options={"isolation_level": "AUTOCOMMIT"},
-        )
 
-        with engine.connect() as conn:
-            # Execute ping check
-            conn.execute(text("SELECT 1"))
-
-        elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
-        engine.dispose()
-
-        return ConnectorTestResponseSchema(
-            success=True,
-            connector_id=connector.id,
-            connection_name=connector.connection_name,
-            database_type=connector.database_type,
-            latency_ms=elapsed_ms,
-            message=f"Successfully connected to external database '{connector.database_name}' in {elapsed_ms}ms (Read-Only Verified).",
-            read_only_verified=True,
-        )
-
-    except Exception as exc:
-        return ConnectorTestResponseSchema(
-            success=False,
-            connector_id=connector.id,
-            connection_name=connector.connection_name,
-            database_type=connector.database_type,
-            latency_ms=None,
-            message=f"Connection failed: {str(exc)}",
-            read_only_verified=True,
-        )
-
+# ── Sync ────────────────────────────────────────────────────────────────────
 
 def sync_annotations_from_connector(
     db: Session,
@@ -268,6 +474,8 @@ def sync_annotations_from_connector(
         connect_args["connect_timeout"] = 5
     elif connector.database_type == "sqlite":
         connect_args["check_same_thread"] = False
+    elif connector.database_type == "mysql":
+        connect_args["connect_timeout"] = 5
 
     engine = create_engine(uri, connect_args=connect_args)
 
@@ -290,6 +498,7 @@ def sync_annotations_from_connector(
             inserted_records=0,
             duplicate_records=0,
             failed_records=0,
+            synced_rows=0,
             message="No records found in external database table/query.",
         )
 
@@ -317,6 +526,11 @@ def sync_annotations_from_connector(
         default_project_id=project_id,
     )
 
+    # Update connector telemetry
+    connector.last_sync_at = datetime.utcnow()
+    connector.synced_rows_count = (connector.synced_rows_count or 0) + ingest_result["inserted_records"]
+    db.commit()
+
     # Recompute trust scores for newly created/updated items
     if ingest_result["inserted_records"] > 0:
         items = db.query(Item).filter(Item.project_id == project_id).all()
@@ -335,5 +549,9 @@ def sync_annotations_from_connector(
         inserted_records=ingest_result["inserted_records"],
         duplicate_records=ingest_result["duplicate_records"],
         failed_records=ingest_result["failed_records"],
-        message=f"Synced {len(fetched_rows)} rows from connector '{connector.connection_name}': {ingest_result['inserted_records']} inserted, {ingest_result['duplicate_records']} duplicates skipped.",
+        synced_rows=ingest_result["inserted_records"],
+        message=(
+            f"Synced {len(fetched_rows)} rows from connector '{connector.connection_name}': "
+            f"{ingest_result['inserted_records']} inserted, {ingest_result['duplicate_records']} duplicates skipped."
+        ),
     )

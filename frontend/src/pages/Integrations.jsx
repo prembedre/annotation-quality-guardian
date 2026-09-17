@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   createConnector,
+  updateConnector,
   deleteConnector,
   fetchConnectors,
   syncConnector,
@@ -20,6 +21,11 @@ import {
   Layers,
   ArrowRight,
   HardDrive,
+  Pencil,
+  Clock,
+  Wifi,
+  WifiOff,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -29,6 +35,8 @@ import {
   LoadingState,
   useToast,
 } from '../components';
+
+// ── Constants ──────────────────────────────────────────────────────────────
 
 const INITIAL_FORM = {
   connection_name: '',
@@ -41,19 +49,263 @@ const INITIAL_FORM = {
   status: 'active',
 };
 
+const INITIAL_ERRORS = {
+  connection_name: '',
+  host: '',
+  port: '',
+  database_name: '',
+  username: '',
+  password: '',
+};
+
 function getDatabasePort(databaseType) {
   if (databaseType === 'mysql') return 3306;
   if (databaseType === 'sqlite') return '';
   return 5432;
 }
 
+function isSqlite(form) {
+  return form.database_type === 'sqlite';
+}
+
+// ── Field styling helpers ──────────────────────────────────────────────────
+
+const baseInputStyle = {
+  width: '100%',
+  padding: '0.45rem 0.65rem',
+  background: 'var(--bg-subtle)',
+  border: '1px solid var(--border-subtle)',
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--text-primary)',
+};
+
+const errorInputStyle = {
+  ...baseInputStyle,
+  border: '1px solid var(--status-risk-border, #f87171)',
+};
+
+const labelStyle = {
+  fontSize: '0.78rem',
+  fontWeight: 600,
+  display: 'block',
+  marginBottom: '3px',
+};
+
+const inlineErrorStyle = {
+  fontSize: '0.7rem',
+  color: 'var(--status-risk-text, #ef4444)',
+  marginTop: '3px',
+};
+
+function FieldError({ msg }) {
+  if (!msg) return null;
+  return <div style={inlineErrorStyle}>{msg}</div>;
+}
+
+// ── Status badge ───────────────────────────────────────────────────────────
+
+function StatusBadge({ connector, testResult }) {
+  // Prefer fresh test result if available
+  const effectiveStatus = testResult
+    ? testResult.status
+    : connector.status === 'active' && connector.last_tested_at
+    ? 'success'
+    : connector.status === 'error'
+    ? 'error'
+    : 'untested';
+
+  if (effectiveStatus === 'success') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div className="pulsing-dot" />
+        <span style={{ fontSize: '0.7rem', color: 'var(--status-good-text)', fontWeight: 500 }}>Connected</span>
+      </div>
+    );
+  }
+  if (effectiveStatus === 'error') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <WifiOff size={11} color="var(--status-risk-text)" />
+        <span style={{ fontSize: '0.7rem', color: 'var(--status-risk-text)', fontWeight: 500 }}>Error</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <AlertTriangle size={11} color="var(--text-muted)" />
+      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>Untested</span>
+    </div>
+  );
+}
+
+// ── Connector form (shared between create and edit) ───────────────────────
+
+function ConnectorForm({ form, errors, onChange, onDbTypeChange, submitError }) {
+  return (
+    <form style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+      {/* Connection Name */}
+      <div>
+        <label style={labelStyle}>
+          Connection Name <span style={{ color: 'var(--status-risk-text)' }}>*</span>
+        </label>
+        <input
+          id="conn-name"
+          type="text"
+          name="connection_name"
+          placeholder="e.g. Primary Production Warehouse"
+          value={form.connection_name}
+          onChange={onChange}
+          style={errors.connection_name ? errorInputStyle : baseInputStyle}
+        />
+        <FieldError msg={errors.connection_name} />
+      </div>
+
+      {/* DB Type + DB Name row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div>
+          <label style={labelStyle}>Database Type</label>
+          <select
+            id="conn-db-type"
+            name="database_type"
+            value={form.database_type}
+            onChange={onDbTypeChange}
+            style={baseInputStyle}
+          >
+            <option value="postgresql">PostgreSQL (15+)</option>
+            <option value="mysql">MySQL / MariaDB</option>
+            <option value="sqlite">SQLite Local File</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>
+            Database Name / File <span style={{ color: 'var(--status-risk-text)' }}>*</span>
+          </label>
+          <input
+            id="conn-db-name"
+            type="text"
+            name="database_name"
+            placeholder={isSqlite(form) ? 'aqg_dev.db' : 'aqg_warehouse'}
+            value={form.database_name}
+            onChange={onChange}
+            style={errors.database_name ? errorInputStyle : baseInputStyle}
+          />
+          <FieldError msg={errors.database_name} />
+        </div>
+      </div>
+
+      {/* Host + Port + Credentials — only for non-SQLite */}
+      {!isSqlite(form) && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <label style={labelStyle}>
+                Host <span style={{ color: 'var(--status-risk-text)' }}>*</span>
+              </label>
+              <input
+                id="conn-host"
+                type="text"
+                name="host"
+                placeholder="localhost or db.internal.net"
+                value={form.host}
+                onChange={onChange}
+                style={errors.host ? errorInputStyle : baseInputStyle}
+              />
+              <FieldError msg={errors.host} />
+            </div>
+            <div>
+              <label style={labelStyle}>
+                Port <span style={{ color: 'var(--status-risk-text)' }}>*</span>
+              </label>
+              <input
+                id="conn-port"
+                type="number"
+                name="port"
+                value={form.port}
+                onChange={onChange}
+                style={errors.port ? errorInputStyle : baseInputStyle}
+              />
+              <FieldError msg={errors.port} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <label style={labelStyle}>
+                Username <span style={{ color: 'var(--status-risk-text)' }}>*</span>
+              </label>
+              <input
+                id="conn-username"
+                type="text"
+                name="username"
+                placeholder="postgres"
+                value={form.username}
+                onChange={onChange}
+                style={errors.username ? errorInputStyle : baseInputStyle}
+              />
+              <FieldError msg={errors.username} />
+            </div>
+            <div>
+              <label style={labelStyle}>
+                Password <span style={{ color: 'var(--status-risk-text)' }}>*</span>
+              </label>
+              <input
+                id="conn-password"
+                type="password"
+                name="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={onChange}
+                style={errors.password ? errorInputStyle : baseInputStyle}
+              />
+              <FieldError msg={errors.password} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Submit-level error banner */}
+      {submitError && (
+        <div
+          style={{
+            padding: '0.5rem 0.75rem',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--status-risk-bg)',
+            border: '1px solid var(--status-risk-border)',
+            color: 'var(--status-risk-text)',
+            fontSize: '0.75rem',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '6px',
+          }}
+        >
+          <AlertOctagon size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <span>{submitError}</span>
+        </div>
+      )}
+    </form>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────
+
 export default function Integrations() {
   const [connectors, setConnectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Create modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [formErrors, setFormErrors] = useState(INITIAL_ERRORS);
+  const [submitError, setSubmitError] = useState('');
+
+  // Edit modal
+  const [editConnector, setEditConnector] = useState(null); // connector object being edited
+  const [editForm, setEditForm] = useState(INITIAL_FORM);
+  const [editErrors, setEditErrors] = useState(INITIAL_ERRORS);
+  const [editSubmitError, setEditSubmitError] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   const [testingId, setTestingId] = useState(null);
   const [syncingId, setSyncingId] = useState(null);
@@ -64,18 +316,20 @@ export default function Integrations() {
   const [syncTable, setSyncTable] = useState('');
   const [syncLimit, setSyncLimit] = useState(1000);
 
-  const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
   const { success, error: toastError, info } = useToast();
+
+  // ── Data loading ──────────────────────────────────────────────────
 
   async function loadConnectors() {
     try {
       setLoading(true);
-      setError('');
+      setPageError('');
       const data = await fetchConnectors();
       setConnectors(data || []);
     } catch (err) {
       console.error('Failed to load connectors:', err);
-      setError(err.response?.data?.detail || 'Failed to load external connectors.');
+      setPageError(err.response?.data?.detail || 'Failed to load external connectors.');
     } finally {
       setLoading(false);
     }
@@ -85,12 +339,19 @@ export default function Integrations() {
     loadConnectors();
   }, []);
 
+  // ── Form helpers ──────────────────────────────────────────────────
+
   function handleFormChange(e) {
     const { name, value } = e.target;
     setForm((curr) => ({
       ...curr,
       [name]: name === 'port' ? (value === '' ? '' : Number(value)) : value,
     }));
+    // Clear field error on change
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+    setSubmitError('');
   }
 
   function handleDatabaseTypeChange(e) {
@@ -100,63 +361,251 @@ export default function Integrations() {
       database_type: databaseType,
       port: getDatabasePort(databaseType),
     }));
+    setFormErrors(INITIAL_ERRORS);
+    setSubmitError('');
   }
 
-  async function handleCreate(e) {
-    e.preventDefault();
+  function handleEditFormChange(e) {
+    const { name, value } = e.target;
+    setEditForm((curr) => ({
+      ...curr,
+      [name]: name === 'port' ? (value === '' ? '' : Number(value)) : value,
+    }));
+    if (editErrors[name]) {
+      setEditErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+    setEditSubmitError('');
+  }
+
+  function handleEditDbTypeChange(e) {
+    const databaseType = e.target.value;
+    setEditForm((curr) => ({
+      ...curr,
+      database_type: databaseType,
+      port: getDatabasePort(databaseType),
+    }));
+    setEditErrors(INITIAL_ERRORS);
+    setEditSubmitError('');
+  }
+
+  // ── Validation ────────────────────────────────────────────────────
+
+  function validateForm(f) {
+    const errs = { ...INITIAL_ERRORS };
+    let valid = true;
+
+    if (!f.connection_name.trim()) {
+      errs.connection_name = 'Connection name is required.';
+      valid = false;
+    }
+    if (!f.database_name.trim()) {
+      errs.database_name = 'Database name / file path is required.';
+      valid = false;
+    }
+
+    if (f.database_type !== 'sqlite') {
+      if (!f.host.trim()) {
+        errs.host = 'Host is required.';
+        valid = false;
+      }
+      if (!f.port || Number(f.port) < 1 || Number(f.port) > 65535) {
+        errs.port = 'A valid port (1–65535) is required.';
+        valid = false;
+      }
+      if (!f.username.trim()) {
+        errs.username = 'Username is required.';
+        valid = false;
+      }
+      if (!f.password.trim()) {
+        errs.password = 'Password is required.';
+        valid = false;
+      }
+    }
+
+    return { errs, valid };
+  }
+
+  // ── Create connector ──────────────────────────────────────────────
+
+  function openCreateModal() {
+    setForm(INITIAL_FORM);
+    setFormErrors(INITIAL_ERRORS);
+    setSubmitError('');
+    setShowCreateModal(true);
+  }
+
+  function closeCreateModal() {
+    if (saving) return;
+    setShowCreateModal(false);
+    setSubmitError('');
+    setFormErrors(INITIAL_ERRORS);
+  }
+
+  async function handleCreate() {
+    const { errs, valid } = validateForm(form);
+    if (!valid) {
+      setFormErrors(errs);
+      return;
+    }
+
     try {
       setSaving(true);
+      setSubmitError('');
       const payload = {
-        connection_name: form.connection_name,
+        connection_name: form.connection_name.trim(),
         database_type: form.database_type,
-        host: form.database_type === 'sqlite' ? null : form.host || null,
-        port: form.database_type === 'sqlite' ? null : Number(form.port),
-        database_name: form.database_name,
-        username: form.database_type === 'sqlite' ? null : form.username || null,
-        password: form.database_type === 'sqlite' ? null : form.password || null,
-        status: form.status,
+        host: isSqlite(form) ? null : form.host.trim() || null,
+        port: isSqlite(form) ? null : Number(form.port),
+        database_name: form.database_name.trim(),
+        username: isSqlite(form) ? null : form.username.trim() || null,
+        password: isSqlite(form) ? null : form.password || null,
+        status: 'active',
       };
 
       await createConnector(payload);
-      success(`Connected to datasource "${form.connection_name}"!`);
-      setForm(INITIAL_FORM);
+      success(`Connected to "${form.connection_name}" — connection verified!`);
       setShowCreateModal(false);
+      setForm(INITIAL_FORM);
+      setFormErrors(INITIAL_ERRORS);
       await loadConnectors();
     } catch (err) {
-      console.error('Failed to create connector:', err);
-      const msg = err.response?.data?.detail || 'Failed to register connection.';
-      toastError(msg);
+      // Keep modal open — show specific error inline
+      const detail = err.response?.data?.detail;
+      let msg;
+      if (detail && typeof detail === 'object' && detail.message) {
+        msg = detail.message;
+      } else if (typeof detail === 'string') {
+        msg = detail;
+      } else {
+        msg = 'Failed to establish connection. Check credentials and try again.';
+      }
+      setSubmitError(msg);
     } finally {
       setSaving(false);
     }
   }
 
+  // ── Edit connector ────────────────────────────────────────────────
+
+  function openEditModal(connector) {
+    setEditConnector(connector);
+    setEditForm({
+      connection_name: connector.connection_name,
+      database_type: connector.database_type,
+      host: connector.host || '',
+      port: connector.port || getDatabasePort(connector.database_type),
+      database_name: connector.database_name,
+      username: connector.username || '',
+      password: '', // never pre-fill password
+      status: connector.status,
+    });
+    setEditErrors(INITIAL_ERRORS);
+    setEditSubmitError('');
+  }
+
+  function closeEditModal() {
+    if (editSaving) return;
+    setEditConnector(null);
+    setEditSubmitError('');
+    setEditErrors(INITIAL_ERRORS);
+  }
+
+  async function handleEdit() {
+    const { errs, valid } = validateForm(editForm);
+    // For edit: password is optional (only validated if non-empty)
+    const adjustedErrs = { ...errs };
+    if (!editForm.password.trim()) {
+      adjustedErrs.password = '';
+    }
+    const adjustedValid = Object.values(adjustedErrs).every((v) => !v);
+
+    if (!adjustedValid) {
+      setEditErrors(adjustedErrs);
+      return;
+    }
+
+    try {
+      setEditSaving(true);
+      setEditSubmitError('');
+      const payload = {
+        connection_name: editForm.connection_name.trim(),
+        host: isSqlite(editForm) ? null : editForm.host.trim() || null,
+        port: isSqlite(editForm) ? null : Number(editForm.port),
+        database_name: editForm.database_name.trim(),
+        username: isSqlite(editForm) ? null : editForm.username.trim() || null,
+        status: editForm.status,
+      };
+      // Only send password if user typed a new one
+      if (editForm.password.trim()) {
+        payload.password = editForm.password;
+      }
+
+      await updateConnector(editConnector.id, payload);
+      success(`Connector "${editForm.connection_name}" updated.`);
+      setEditConnector(null);
+      await loadConnectors();
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      let msg;
+      if (detail && typeof detail === 'object' && detail.message) {
+        msg = detail.message;
+      } else if (typeof detail === 'string') {
+        msg = detail;
+      } else {
+        msg = 'Failed to update connector.';
+      }
+      setEditSubmitError(msg);
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  // ── Test connection ───────────────────────────────────────────────
+
   async function handleTest(connectorId) {
     try {
       setTestingId(connectorId);
       const res = await testConnector(connectorId);
+
+      // res.status is now "success" | "error" (string from backend)
+      // res.success is the bool
+      const resultStatus = res.status || (res.success ? 'success' : 'error');
+
       setTestResults((prev) => ({
         ...prev,
         [connectorId]: {
-          status: res.status,
-          latency: '24ms',
-          message: res.message || 'Connection healthy & responsive',
+          status: resultStatus,
+          latency: res.latency_ms != null ? `${res.latency_ms}ms` : null,
+          message: res.message || (res.success ? 'Connection healthy & responsive' : 'Connection failed'),
+          error_type: res.error_type,
         },
       }));
-      success('Datasource ping successful! (24ms latency)');
+
+      if (res.success) {
+        const latStr = res.latency_ms != null ? ` (${res.latency_ms}ms)` : '';
+        success(`Connection test passed${latStr}`);
+      } else {
+        toastError(`Connection test failed: ${res.message}`);
+      }
+
+      // Refresh connectors so last_tested_at updates on card
+      await loadConnectors();
     } catch (err) {
       setTestResults((prev) => ({
         ...prev,
         [connectorId]: {
           status: 'error',
-          message: err.response?.data?.detail || 'Connection failed',
+          message: err.response?.data?.detail || 'Connection test request failed.',
+          error_type: 'unknown',
         },
       }));
-      toastError('Datasource ping failed.');
+      toastError('Connection test failed.');
     } finally {
       setTestingId(null);
     }
   }
+
+  // ── Sync ──────────────────────────────────────────────────────────
 
   async function handleSyncSubmit(e) {
     e.preventDefault();
@@ -164,11 +613,13 @@ export default function Integrations() {
     try {
       setSyncingId(activeSyncConnector.id);
       const payload = {
+        project_id: 1,
         table_name: syncTable.trim() || undefined,
         limit: Number(syncLimit) || 1000,
       };
       const res = await syncConnector(activeSyncConnector.id, payload);
-      success(`Synced ${res.synced_rows ?? 0} annotations into Project #1!`);
+      const inserted = res.synced_rows ?? res.inserted_records ?? 0;
+      success(`Synced ${inserted} annotations into Project #1!`);
       setActiveSyncConnector(null);
       setSyncTable('');
       await loadConnectors();
@@ -179,202 +630,115 @@ export default function Integrations() {
     }
   }
 
+  // ── Delete ────────────────────────────────────────────────────────
+
   async function handleDelete(connectorId) {
-    if (!window.confirm('Disconnect this database integration?')) return;
+    if (!window.confirm('Disconnect and delete this database integration?')) return;
     try {
       await deleteConnector(connectorId);
       info('Database connector removed.');
+      setTestResults((prev) => {
+        const next = { ...prev };
+        delete next[connectorId];
+        return next;
+      });
       await loadConnectors();
     } catch (err) {
       toastError('Failed to delete connector.');
     }
   }
 
+  // ── Render ────────────────────────────────────────────────────────
+
   return (
     <div>
-      {/* Create Connector Modal */}
+      {/* ── Create Connector Modal ─────────────────────────────────── */}
       <Modal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={closeCreateModal}
         title="Connect External Database"
         subtitle="Link PostgreSQL, MySQL, or SQLite to ingest annotation batches."
         maxWidth="540px"
         footer={
           <>
             <button
+              id="create-connector-cancel"
               type="button"
               className="secondary-btn"
-              onClick={() => setShowCreateModal(false)}
+              onClick={closeCreateModal}
               disabled={saving}
             >
               Cancel
             </button>
             <button
+              id="create-connector-submit"
               type="button"
               className="primary-btn"
               onClick={handleCreate}
-              disabled={saving || !form.connection_name.trim()}
+              disabled={saving}
             >
               <Plus size={14} />
-              <span>{saving ? 'Connecting...' : 'Establish Connection'}</span>
+              <span>{saving ? 'Testing & Connecting…' : 'Establish Connection'}</span>
             </button>
           </>
         }
       >
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          <div>
-            <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>
-              Connection Name
-            </label>
-            <input
-              type="text"
-              name="connection_name"
-              placeholder="e.g. Primary Production Warehouse"
-              value={form.connection_name}
-              onChange={handleFormChange}
-              required
-              style={{
-                width: '100%',
-                padding: '0.45rem 0.65rem',
-                background: 'var(--bg-subtle)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>
-                Database Type
-              </label>
-              <select
-                name="database_type"
-                value={form.database_type}
-                onChange={handleDatabaseTypeChange}
-                style={{
-                  width: '100%',
-                  padding: '0.45rem 0.65rem',
-                  background: 'var(--bg-subtle)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                <option value="postgresql">PostgreSQL (15+)</option>
-                <option value="mysql">MySQL / MariaDB</option>
-                <option value="sqlite">SQLite Local File</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>
-                Database Name / File
-              </label>
-              <input
-                type="text"
-                name="database_name"
-                placeholder={form.database_type === 'sqlite' ? 'aqg_dev.db' : 'aqg_warehouse'}
-                value={form.database_name}
-                onChange={handleFormChange}
-                required
-                style={{
-                  width: '100%',
-                  padding: '0.45rem 0.65rem',
-                  background: 'var(--bg-subtle)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-            </div>
-          </div>
-
-          {form.database_type !== 'sqlite' && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Host</label>
-                  <input
-                    type="text"
-                    name="host"
-                    placeholder="localhost or db.internal.net"
-                    value={form.host}
-                    onChange={handleFormChange}
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      background: 'var(--bg-subtle)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Port</label>
-                  <input
-                    type="number"
-                    name="port"
-                    value={form.port}
-                    onChange={handleFormChange}
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      background: 'var(--bg-subtle)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Username</label>
-                  <input
-                    type="text"
-                    name="username"
-                    placeholder="postgres"
-                    value={form.username}
-                    onChange={handleFormChange}
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      background: 'var(--bg-subtle)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Password</label>
-                  <input
-                    type="password"
-                    name="password"
-                    placeholder="••••••••"
-                    value={form.password}
-                    onChange={handleFormChange}
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      background: 'var(--bg-subtle)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </form>
+        <ConnectorForm
+          form={form}
+          errors={formErrors}
+          onChange={handleFormChange}
+          onDbTypeChange={handleDatabaseTypeChange}
+          submitError={submitError}
+        />
       </Modal>
 
-      {/* Sync Modal */}
+      {/* ── Edit Connector Modal ───────────────────────────────────── */}
+      <Modal
+        isOpen={!!editConnector}
+        onClose={closeEditModal}
+        title="Edit Database Connector"
+        subtitle={`Update configuration for "${editConnector?.connection_name}".`}
+        maxWidth="540px"
+        footer={
+          <>
+            <button
+              id="edit-connector-cancel"
+              type="button"
+              className="secondary-btn"
+              onClick={closeEditModal}
+              disabled={editSaving}
+            >
+              Cancel
+            </button>
+            <button
+              id="edit-connector-submit"
+              type="button"
+              className="primary-btn"
+              onClick={handleEdit}
+              disabled={editSaving}
+            >
+              <Pencil size={14} />
+              <span>{editSaving ? 'Saving…' : 'Save Changes'}</span>
+            </button>
+          </>
+        }
+      >
+        <ConnectorForm
+          form={editForm}
+          errors={editErrors}
+          onChange={handleEditFormChange}
+          onDbTypeChange={handleEditDbTypeChange}
+          submitError={editSubmitError}
+        />
+        {/* Note that password is optional on edit */}
+        {editConnector && (
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+            Leave the password field blank to keep the existing stored credential.
+          </p>
+        )}
+      </Modal>
+
+      {/* ── Sync Modal ────────────────────────────────────────────────  */}
       <Modal
         isOpen={!!activeSyncConnector}
         onClose={() => setActiveSyncConnector(null)}
@@ -405,47 +769,28 @@ export default function Integrations() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           <div>
-            <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>
-              Target Table Name (Optional)
-            </label>
+            <label style={labelStyle}>Target Table Name (Optional)</label>
             <input
               type="text"
               placeholder="annotations_stream"
               value={syncTable}
               onChange={(e) => setSyncTable(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.45rem 0.65rem',
-                background: 'var(--bg-subtle)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-              }}
+              style={baseInputStyle}
             />
           </div>
-
           <div>
-            <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>
-              Max Row Limit
-            </label>
+            <label style={labelStyle}>Max Row Limit</label>
             <input
               type="number"
               value={syncLimit}
               onChange={(e) => setSyncLimit(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.45rem 0.65rem',
-                background: 'var(--bg-subtle)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-              }}
+              style={baseInputStyle}
             />
           </div>
         </div>
       </Modal>
 
-      {/* Standard Page Header */}
+      {/* ── Page Header ───────────────────────────────────────────────  */}
       <PageHeader
         eyebrow="Data Ingestion & Warehouses"
         title="Database Integrations"
@@ -463,9 +808,10 @@ export default function Integrations() {
             </button>
 
             <button
+              id="add-connector-btn"
               type="button"
               className="primary-btn"
-              onClick={() => setShowCreateModal(true)}
+              onClick={openCreateModal}
             >
               <Plus size={14} />
               <span>Add Connector</span>
@@ -474,8 +820,9 @@ export default function Integrations() {
         }
       />
 
-      {error && <ErrorState message={error} onRetry={loadConnectors} />}
+      {pageError && <ErrorState message={pageError} onRetry={loadConnectors} />}
 
+      {/* ── Content ─────────────────────────────────────────────────── */}
       {loading ? (
         <div className="card">
           <LoadingState count={3} />
@@ -488,7 +835,7 @@ export default function Integrations() {
             title="No Database Connectors Registered"
             description="Link your Postgres, MySQL, or SQLite warehouse to automate annotation quality streaming."
             actionLabel="Connect First Database"
-            onAction={() => setShowCreateModal(true)}
+            onAction={openCreateModal}
           />
         </div>
       ) : (
@@ -498,8 +845,13 @@ export default function Integrations() {
             const isTesting = testingId === conn.id;
 
             return (
-              <div key={conn.id} className="card" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div
+                key={conn.id}
+                className="card"
+                style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+              >
                 <div>
+                  {/* Card header */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                       <div className="stat-card-icon-wrap" style={{ width: '36px', height: '36px' }}>
@@ -515,33 +867,54 @@ export default function Integrations() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <div className="pulsing-dot" />
-                      <span style={{ fontSize: '0.7rem', color: 'var(--status-good-text)', fontWeight: 500 }}>Live</span>
-                    </div>
+                    <StatusBadge connector={conn} testResult={testResult} />
                   </div>
 
                   {/* Telemetry rows */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', background: 'var(--bg-subtle)', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', marginBottom: '1rem', fontSize: '0.75rem' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.35rem',
+                      background: 'var(--bg-subtle)',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-subtle)',
+                      marginBottom: '1rem',
+                      fontSize: '0.75rem',
+                    }}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Host Address:</span>
-                      <span className="mono-cell" style={{ color: 'var(--text-primary)' }}>{conn.host || 'Local File'}</span>
+                      <span className="mono-cell" style={{ color: 'var(--text-primary)' }}>
+                        {conn.host ? `${conn.host}${conn.port ? `:${conn.port}` : ''}` : 'Local File'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Last Tested:</span>
+                      <span className="mono-cell" style={{ color: 'var(--text-primary)' }}>
+                        {conn.last_tested_at
+                          ? new Date(conn.last_tested_at).toLocaleString()
+                          : 'Never tested'}
+                      </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Last Sync Time:</span>
                       <span className="mono-cell" style={{ color: 'var(--text-primary)' }}>
-                        {conn.last_sync_at ? new Date(conn.last_sync_at).toLocaleString() : 'Never synced'}
+                        {conn.last_sync_at
+                          ? new Date(conn.last_sync_at).toLocaleString()
+                          : 'Never synced'}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Total Records Ingested:</span>
                       <span className="mono-cell" style={{ color: 'var(--accent-brand)', fontWeight: 600 }}>
-                        {conn.synced_rows_count ?? 50} rows
+                        {(conn.synced_rows_count ?? 0).toLocaleString()} rows
                       </span>
                     </div>
                   </div>
 
-                  {/* Inline test result banner if tested */}
+                  {/* Inline test result banner */}
                   {testResult && (
                     <div
                       style={{
@@ -553,19 +926,36 @@ export default function Integrations() {
                         color: testResult.status === 'success' ? 'var(--status-good-text)' : 'var(--status-risk-text)',
                         border: `1px solid ${testResult.status === 'success' ? 'var(--status-good-border)' : 'var(--status-risk-border)'}`,
                         display: 'flex',
-                        alignItems: 'center',
+                        alignItems: 'flex-start',
                         gap: '6px',
                       }}
                     >
-                      <CheckCircle2 size={13} />
-                      <span>{testResult.message} ({testResult.latency})</span>
+                      {testResult.status === 'success' ? (
+                        <CheckCircle2 size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
+                      ) : (
+                        <AlertOctagon size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
+                      )}
+                      <span>
+                        {testResult.message}
+                        {testResult.latency ? ` — ${testResult.latency}` : ''}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {/* Card Action Footer */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  {/* Left: Test Connection */}
                   <button
+                    id={`test-conn-${conn.id}`}
                     type="button"
                     className="secondary-btn"
                     onClick={() => handleTest(conn.id)}
@@ -576,8 +966,10 @@ export default function Integrations() {
                     <span>{isTesting ? 'Testing...' : 'Test Connection'}</span>
                   </button>
 
+                  {/* Right: Sync + Edit + Delete */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <button
+                      id={`sync-conn-${conn.id}`}
                       type="button"
                       className="primary-btn"
                       onClick={() => setActiveSyncConnector(conn)}
@@ -588,6 +980,18 @@ export default function Integrations() {
                     </button>
 
                     <button
+                      id={`edit-conn-${conn.id}`}
+                      type="button"
+                      className="icon-action-btn"
+                      onClick={() => openEditModal(conn)}
+                      title="Edit connector"
+                      style={{ width: '28px', height: '28px' }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+
+                    <button
+                      id={`delete-conn-${conn.id}`}
                       type="button"
                       className="icon-action-btn"
                       onClick={() => handleDelete(conn.id)}

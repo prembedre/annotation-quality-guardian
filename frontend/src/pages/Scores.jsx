@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { fetchScores, computeScores } from '../services/api';
+import api from '../services/api';
 import {
   Award,
   Play,
@@ -26,6 +27,7 @@ const PROJECT_ID = 1;
 
 export default function Scores() {
   const [scores, setScores] = useState([]);
+  const [scoreSummary, setScoreSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [computing, setComputing] = useState(false);
   const [lastComputed, setLastComputed] = useState(null);
@@ -50,27 +52,53 @@ export default function Scores() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Load aggregate summary metrics (kappa, gold accuracy, avg trust score)
+  const loadSummary = useCallback(async () => {
+    try {
+      const { data } = await api.get('/scores/summary', { params: { project_id: PROJECT_ID } });
+      setScoreSummary(data);
+    } catch (_) {
+      // Summary is supplementary — don't block page on error
+    }
+  }, []);
+
   useEffect(() => {
     loadScores();
-  }, [loadScores]);
+    loadSummary();
+  }, [loadScores, loadSummary]);
 
   const handleCompute = async () => {
     try {
       setComputing(true);
       setError('');
       const result = await computeScores(PROJECT_ID);
-      success(result?.message || 'Quality scores computed successfully!');
+      // Backend now returns { status, message, result } — use the specific message
+      const msg = result?.message || `Scored ${result?.result?.trust_score_summary?.total_items_processed ?? 0} items successfully.`;
+      success(msg);
       setLastComputed(new Date().toLocaleTimeString());
+      // Fetch fresh score summary for the metric cards
+      try {
+        const summaryResp = await api.get('/scores/summary', { params: { project_id: PROJECT_ID } });
+        setScoreSummary(summaryResp.data);
+      } catch (_) {}
       loadScores();
     } catch (err) {
       console.error('Computation failed:', err);
-      const msg = err.response?.data?.detail || 'Failed to compute scores.';
+      // Surface the specific backend reason — never show a generic message
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? `Failed to compute scores: ${detail}`
+        : err.message
+        ? `Failed to compute scores: ${err.message}`
+        : 'Failed to compute scores. Check server logs for details.';
       setError(msg);
       toastError(msg);
     } finally {
       setComputing(false);
     }
   };
+
+
 
   const apiSnippets = {
     curl: `curl -X POST "http://localhost:8000/api/scores/compute?project_id=${PROJECT_ID}" \\
@@ -90,39 +118,51 @@ const scores = await response.json();
 console.log("Quality Scores:", scores);`,
   };
 
-  // Metrics breakdown config
+  // Metrics breakdown config — driven by real API data when available
+  const kappaVal = scoreSummary?.kappa;
+  const goldVal = scoreSummary?.avg_gold_accuracy;
+  const avgTrust = scoreSummary?.avg_trust_score;
+
   const benchmarkMetrics = [
     {
       title: 'Gold Accuracy',
-      value: '91.4%',
+      value: goldVal != null ? `${(goldVal * 100).toFixed(1)}%` : (scores.length > 0 ? '—' : '91.4%'),
       threshold: '90.0%',
-      passed: true,
+      passed: goldVal != null ? goldVal >= 0.9 : true,
       icon: ShieldCheck,
       desc: 'Agreement against expert ground-truth benchmarks.',
+      live: goldVal != null,
     },
     {
       title: "Cohen's Kappa",
-      value: '0.782',
+      value: kappaVal != null ? kappaVal.toFixed(3) : (scores.length > 0 ? '—' : '0.782'),
       threshold: '0.700',
-      passed: true,
+      passed: kappaVal != null ? kappaVal >= 0.7 : true,
       icon: Scale,
       desc: 'Pairwise inter-annotator consensus factoring chance agreement.',
+      live: kappaVal != null,
     },
     {
-      title: 'Behavioral Reliability',
-      value: '88.5%',
+      title: 'Avg Trust Score',
+      value: avgTrust != null ? `${(avgTrust * 100).toFixed(1)}%` : (scores.length > 0 ? '—' : '88.5%'),
       threshold: '75.0%',
-      passed: true,
+      passed: avgTrust != null ? avgTrust >= 0.75 : true,
       icon: Activity,
-      desc: 'Telemetry on annotation speed, click cadence, and pattern variance.',
+      desc: 'Weighted combination of gold accuracy, agreement, behavioral, and embedding signals.',
+      live: avgTrust != null,
     },
     {
-      title: 'Embedding Centroid Proximity',
-      value: '84.2%',
-      threshold: '80.0%',
-      passed: true,
+      title: 'Flagged Items',
+      value: scoreSummary?.flagged_count != null
+        ? `${scoreSummary.flagged_count} / ${scoreSummary.total_items}`
+        : (scores.length > 0 ? '0 / 0' : '0 / 14'),
+      threshold: '< 10%',
+      passed: scoreSummary
+        ? (scoreSummary.total_items > 0 ? scoreSummary.flagged_count / scoreSummary.total_items < 0.1 : true)
+        : true,
       icon: Layers,
-      desc: 'Cosine distance of sample vectors to category cluster centers.',
+      desc: 'Items below the 60% trust threshold requiring human review.',
+      live: scoreSummary?.flagged_count != null,
     },
   ];
 

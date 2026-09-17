@@ -64,7 +64,7 @@ class ExternalDBConnector(Base):
     password_encrypted = Column(
         String(500),
         nullable=True,
-        doc="Encrypted password or secret vault reference",
+        doc="Fernet-encrypted password (falls back to base64 if cryptography unavailable)",
     )
 
     status = Column(
@@ -88,6 +88,29 @@ class ExternalDBConnector(Base):
         default=dict,
         doc="Configuration for fetching annotations (table_name, column_mapping, query)",
     )
+
+    # ── Telemetry columns ───────────────────────────────────────────
+
+    last_sync_at = Column(
+        DateTime,
+        nullable=True,
+        doc="Timestamp of last successful data synchronization",
+    )
+
+    synced_rows_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        doc="Cumulative total of annotation rows ingested via this connector",
+    )
+
+    last_tested_at = Column(
+        DateTime,
+        nullable=True,
+        doc="Timestamp of last connection test (ping)",
+    )
+
+    # ── Audit columns ───────────────────────────────────────────────
 
     created_at = Column(
         DateTime,

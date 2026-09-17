@@ -23,6 +23,15 @@ export async function createConnector(payload) {
   return data;
 }
 
+export async function updateConnector(connectorId, payload) {
+  const { data } = await api.put(
+    `/integrations/connectors/${connectorId}`,
+    payload
+  );
+
+  return data;
+}
+
 export async function testConnector(connectorId) {
   const { data } = await api.post(
     `/integrations/connectors/${connectorId}/test`
