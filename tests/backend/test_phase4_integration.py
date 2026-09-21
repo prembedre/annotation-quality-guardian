@@ -6,7 +6,17 @@ Automatic Task Rerouting, A/B Testing database support, and end-to-end integrati
 import os
 import sqlite3
 import pytest
-from app.models import Project, Item, Annotator, Annotation, TrustScore, ExternalDBConnector, RerouteHistory, ABTestExperiment
+
+from app.models import (
+    Project,
+    Item,
+    Annotator,
+    Annotation,
+    TrustScore,
+    ExternalDBConnector,
+    RerouteHistory,
+    ABTestExperiment,
+)
 
 
 @pytest.fixture
@@ -25,6 +35,7 @@ def sample_project_and_annotators(db_session):
     ann3 = Annotator(id=3, username="annotator_charlie")
     db_session.add_all([ann1, ann2, ann3])
     db_session.commit()
+
     return proj
 
 
@@ -35,7 +46,8 @@ def external_sqlite_db(tmp_path):
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE label_studio_tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_external_id TEXT NOT NULL,
@@ -45,19 +57,52 @@ def external_sqlite_db(tmp_path):
             duration_ms INTEGER,
             data_content TEXT
         )
-    """)
+        """
+    )
 
-    cursor.executemany("""
-        INSERT INTO label_studio_tasks (task_external_id, annotator_id, result_label, confidence, duration_ms, data_content)
+    cursor.executemany(
+        """
+        INSERT INTO label_studio_tasks (
+            task_external_id,
+            annotator_id,
+            result_label,
+            confidence,
+            duration_ms,
+            data_content
+        )
         VALUES (?, ?, ?, ?, ?, ?)
-    """, [
-        ("EXT-TASK-101", 1, "Positive", 0.96, 1500, '{"text": "Superb product quality!"}'),
-        ("EXT-TASK-102", 2, "Negative", 0.89, 2100, '{"text": "Broke on the second day."}'),
-        ("EXT-TASK-103", 3, "Neutral", 0.75, 3400, '{"text": "Average performance."}'),
-    ])
+        """,
+        [
+            (
+                "EXT-TASK-101",
+                1,
+                "Positive",
+                0.96,
+                1500,
+                '{"text": "Superb product quality!"}',
+            ),
+            (
+                "EXT-TASK-102",
+                2,
+                "Negative",
+                0.89,
+                2100,
+                '{"text": "Broke on the second day."}',
+            ),
+            (
+                "EXT-TASK-103",
+                3,
+                "Neutral",
+                0.75,
+                3400,
+                '{"text": "Average performance."}',
+            ),
+        ],
+    )
 
     conn.commit()
     conn.close()
+
     return str(db_file)
 
 
@@ -65,8 +110,10 @@ def external_sqlite_db(tmp_path):
 # 1. EXTERNAL DB CONNECTOR TESTS (CRUD, TESTING, & SECURITY)
 # ==============================================================================
 
+
 def test_external_connector_lifecycle(client, sample_project_and_annotators):
     """Test creating, listing, and deleting read-only external DB connectors."""
+
     # 1. Create connector
     create_payload = {
         "connection_name": "test_label_studio_pg",
@@ -79,42 +126,73 @@ def test_external_connector_lifecycle(client, sample_project_and_annotators):
         "status": "active",
         "query_config": {
             "table_name": "task_completion",
-            "column_mapping": {"external_id": "task_id", "label": "result_label"},
+            "column_mapping": {
+                "external_id": "task_id",
+                "label": "result_label",
+            },
         },
     }
 
-    res_create = client.post("/api/integrations/connectors", json=create_payload)
+    res_create = client.post(
+        "/api/integrations/connectors",
+        json=create_payload,
+    )
+
     assert res_create.status_code == 201
+
     data = res_create.json()
     assert data["id"] is not None
     assert data["connection_name"] == "test_label_studio_pg"
     assert data["read_only"] is True
+
     # Verify password is NOT in response
     assert "password" not in data
     assert "password_encrypted" not in data
+
     connector_id = data["id"]
 
     # 2. List connectors
     res_list = client.get("/api/integrations/connectors")
+
     assert res_list.status_code == 200
+
     connectors = res_list.json()
+
     assert len(connectors) >= 1
-    found = next((c for c in connectors if c["id"] == connector_id), None)
+
+    found = next(
+        (c for c in connectors if c["id"] == connector_id),
+        None,
+    )
+
     assert found is not None
     assert "password" not in found
 
     # 3. Delete connector
-    res_del = client.delete(f"/api/integrations/connectors/{connector_id}")
+    res_del = client.delete(
+        f"/api/integrations/connectors/{connector_id}"
+    )
+
     assert res_del.status_code == 200
     assert res_del.json()["success"] is True
 
     # 4. Verify deletion
     res_list2 = client.get("/api/integrations/connectors")
-    assert not any(c["id"] == connector_id for c in res_list2.json())
+
+    assert not any(
+        c["id"] == connector_id
+        for c in res_list2.json()
+    )
 
 
-def test_external_connector_test_and_sync(client, sample_project_and_annotators, external_sqlite_db, db_session):
+def test_external_connector_test_and_sync(
+    client,
+    sample_project_and_annotators,
+    external_sqlite_db,
+    db_session,
+):
     """Test connecting to a real external DB (SQLite), testing connectivity, and syncing data."""
+
     # 1. Register connector pointing to temp SQLite DB
     create_payload = {
         "connection_name": "local_sqlite_replica",
@@ -134,14 +212,24 @@ def test_external_connector_test_and_sync(client, sample_project_and_annotators,
         },
     }
 
-    res_create = client.post("/api/integrations/connectors", json=create_payload)
+    res_create = client.post(
+        "/api/integrations/connectors",
+        json=create_payload,
+    )
+
     assert res_create.status_code == 201
+
     connector_id = res_create.json()["id"]
 
     # 2. Test Connection
-    res_test = client.post(f"/api/integrations/connectors/{connector_id}/test")
+    res_test = client.post(
+        f"/api/integrations/connectors/{connector_id}/test"
+    )
+
     assert res_test.status_code == 200
+
     test_data = res_test.json()
+
     assert test_data["success"] is True
     assert test_data["read_only_verified"] is True
     assert test_data["latency_ms"] is not None
@@ -151,38 +239,69 @@ def test_external_connector_test_and_sync(client, sample_project_and_annotators,
         "project_id": 1,
         "table_name": "label_studio_tasks",
     }
-    res_sync = client.post(f"/api/integrations/connectors/{connector_id}/sync", json=sync_payload)
+
+    res_sync = client.post(
+        f"/api/integrations/connectors/{connector_id}/sync",
+        json=sync_payload,
+    )
+
     assert res_sync.status_code == 200
+
     sync_data = res_sync.json()
+
     assert sync_data["success"] is True
     assert sync_data["total_fetched"] == 3
     assert sync_data["inserted_records"] == 3
     assert sync_data["duplicate_records"] == 0
 
     # 4. Verify items and annotations in AQG DB
-    item1 = db_session.query(Item).filter(Item.external_id == "EXT-TASK-101").first()
+    item1 = (
+        db_session.query(Item)
+        .filter(Item.external_id == "EXT-TASK-101")
+        .first()
+    )
+
     assert item1 is not None
     assert item1.project_id == 1
-    ann1 = db_session.query(Annotation).filter(Annotation.item_id == item1.id).first()
+
+    ann1 = (
+        db_session.query(Annotation)
+        .filter(Annotation.item_id == item1.id)
+        .first()
+    )
+
     assert ann1 is not None
     assert ann1.label == "Positive"
     assert ann1.confidence == 0.96
 
     # 5. Verify re-sync handles duplicate skipping
-    res_sync_dup = client.post(f"/api/integrations/connectors/{connector_id}/sync", json=sync_payload)
+    res_sync_dup = client.post(
+        f"/api/integrations/connectors/{connector_id}/sync",
+        json=sync_payload,
+    )
+
     assert res_sync_dup.status_code == 200
     assert res_sync_dup.json()["inserted_records"] == 0
     assert res_sync_dup.json()["duplicate_records"] == 3
 
 
-def test_read_only_security_rejects_mutation_queries(client, sample_project_and_annotators, external_sqlite_db):
+def test_read_only_security_rejects_mutation_queries(
+    client,
+    sample_project_and_annotators,
+    external_sqlite_db,
+):
     """Test that any attempt to execute mutation queries is strictly rejected."""
+
     # Register connector
-    res_create = client.post("/api/integrations/connectors", json={
-        "connection_name": "mutation_test_conn",
-        "database_type": "sqlite",
-        "database_name": external_sqlite_db,
-    })
+    res_create = client.post(
+        "/api/integrations/connectors",
+        json={
+            "connection_name": "mutation_test_conn",
+            "database_type": "sqlite",
+            "database_name": external_sqlite_db,
+        },
+    )
+
     connector_id = res_create.json()["id"]
 
     # Attempt forbidden queries
@@ -194,27 +313,61 @@ def test_read_only_security_rejects_mutation_queries(client, sample_project_and_
     ]
 
     for fq in forbidden_queries:
-        res = client.post(f"/api/integrations/connectors/{connector_id}/sync", json={
-            "project_id": 1,
-            "custom_query": fq,
-        })
+        res = client.post(
+            f"/api/integrations/connectors/{connector_id}/sync",
+            json={
+                "project_id": 1,
+                "custom_query": fq,
+            },
+        )
+
         assert res.status_code == 400
-        assert "Only SELECT queries are permitted" in res.json()["detail"] or "Forbidden mutation" in res.json()["detail"]
+
+        assert (
+            "Only SELECT queries are permitted"
+            in res.json()["detail"]
+            or "Forbidden mutation"
+            in res.json()["detail"]
+        )
 
 
 # ==============================================================================
 # 2. AUTOMATIC TASK REROUTING TESTS
 # ==============================================================================
 
-def test_task_rerouting_flow(client, sample_project_and_annotators, db_session):
+
+def test_task_rerouting_flow(
+    client,
+    sample_project_and_annotators,
+    db_session,
+):
     """Test retrieving pending reroute tasks and assigning them to new annotators."""
+
     # 1. Create a flagged item with low trust score
-    item = Item(project_id=1, external_id="REROUTE_ITEM_01", content={"text": "Unclear text"})
+    item = Item(
+        project_id=1,
+        external_id="REROUTE_ITEM_01",
+        content={"text": "Unclear text"},
+    )
+
     db_session.add(item)
     db_session.commit()
 
-    ann = Annotation(project_id=1, item_id=item.id, annotator_id=2, label="Negative", confidence=0.4)
-    ts = TrustScore(project_id=1, item_id=item.id, final_score=0.35, flagged=True)
+    ann = Annotation(
+        project_id=1,
+        item_id=item.id,
+        annotator_id=2,
+        label="Negative",
+        confidence=0.4,
+    )
+
+    ts = TrustScore(
+        project_id=1,
+        item_id=item.id,
+        final_score=0.35,
+        flagged=True,
+    )
+
     db_session.add_all([ann, ts])
     db_session.commit()
 
@@ -227,15 +380,30 @@ def test_task_rerouting_flow(client, sample_project_and_annotators, db_session):
         trust_score_snapshot=0.35,
         reroute_status="PENDING",
     )
+
     db_session.add(reroute)
     db_session.commit()
 
     # 2. GET pending reroutes
-    res_pending = client.get("/api/rerouting/pending?project_id=1")
+    res_pending = client.get(
+        "/api/rerouting/pending?project_id=1"
+    )
+
     assert res_pending.status_code == 200
+
     data = res_pending.json()
+
     assert data["total"] >= 1
-    pending_item = next((i for i in data["items"] if i["item_id"] == item.id), None)
+
+    pending_item = next(
+        (
+            i
+            for i in data["items"]
+            if i["item_id"] == item.id
+        ),
+        None,
+    )
+
     assert pending_item is not None
     assert pending_item["reroute_status"] == "PENDING"
     assert pending_item["original_annotator_id"] == 2
@@ -245,42 +413,174 @@ def test_task_rerouting_flow(client, sample_project_and_annotators, db_session):
         "reassigned_annotator_id": 1,
         "reason": "Reassigned to senior annotator Alice for second pass",
     }
-    res_assign = client.post(f"/api/rerouting/{item.id}/assign", json=assign_payload)
+
+    res_assign = client.post(
+        f"/api/rerouting/{item.id}/assign",
+        json=assign_payload,
+    )
+
     assert res_assign.status_code == 200
+
     assign_data = res_assign.json()
+
     assert assign_data["success"] is True
     assert assign_data["reroute_status"] == "ASSIGNED"
     assert assign_data["reassigned_annotator_id"] == 1
-    assert "Alice" in assign_data["message"] or "annotator_alice" in assign_data["message"]
+    assert (
+        "Alice" in assign_data["message"]
+        or "annotator_alice" in assign_data["message"]
+    )
 
     # 4. Verify DB status
     db_session.refresh(reroute)
+
     assert reroute.reroute_status == "ASSIGNED"
     assert reroute.reassigned_annotator_id == 1
+
+
+def test_reroute_completes_when_reassigned_annotator_submits(
+    client,
+    sample_project_and_annotators,
+    db_session,
+):
+    """Test that an assigned reroute is completed after the new annotator submits an annotation."""
+
+    # 1. Create the item
+    item = Item(
+        project_id=1,
+        external_id="REROUTE_COMPLETE_01",
+        content={"text": "Product quality is excellent"},
+    )
+
+    db_session.add(item)
+    db_session.commit()
+
+    # 2. Create the original annotation from the underperforming annotator
+    original_annotation = Annotation(
+        project_id=1,
+        item_id=item.id,
+        annotator_id=2,
+        label="Positive",
+        confidence=0.4,
+    )
+
+    # 3. Create a low trust score that caused the reroute
+    trust_score = TrustScore(
+        project_id=1,
+        item_id=item.id,
+        final_score=0.35,
+        flagged=True,
+    )
+
+    # 4. Create an already-assigned reroute
+    reroute = RerouteHistory(
+        item_id=item.id,
+        project_id=1,
+        original_annotator_id=2,
+        reassigned_annotator_id=1,
+        reason="Low trust score detected",
+        trust_score_snapshot=0.35,
+        reroute_status="ASSIGNED",
+    )
+
+    db_session.add_all(
+        [
+            original_annotation,
+            trust_score,
+            reroute,
+        ]
+    )
+
+    db_session.commit()
+
+    # 5. Reassigned annotator (Alice / ID 1) submits a new annotation
+    annotation_payload = {
+        "project_id": 1,
+        "item_id": item.id,
+        "annotator_id": 1,
+        "label": "Positive",
+        "confidence": 0.95,
+    }
+
+    response = client.post(
+        "/api/annotations",
+        json=annotation_payload,
+    )
+
+    assert response.status_code == 201
+
+    # 6. Verify the reroute was automatically completed
+    db_session.refresh(reroute)
+
+    assert reroute.reroute_status == "COMPLETED"
+    assert reroute.reassigned_annotator_id == 1
+
+    # 7. Verify the new annotation exists
+    new_annotation = (
+        db_session.query(Annotation)
+        .filter(
+            Annotation.item_id == item.id,
+            Annotation.annotator_id == 1,
+        )
+        .first()
+    )
+
+    assert new_annotation is not None
+    assert new_annotation.label == "Positive"
+    assert new_annotation.confidence == 0.95
 
 
 # ==============================================================================
 # 3. A/B TESTING DATABASE SUPPORT TESTS
 # ==============================================================================
 
-def test_ab_testing_database_model(db_session, sample_project_and_annotators):
+
+def test_ab_testing_database_model(
+    db_session,
+    sample_project_and_annotators,
+):
     """Test creating and querying A/B testing experiment configurations."""
+
     exp = ABTestExperiment(
         experiment_name="Phase 4 Label Hierarchy Experiment",
         project_id=1,
-        schema_version_a={"version": "1.0", "labels": ["Positive", "Negative", "Neutral"]},
-        schema_version_b={"version": "2.0", "labels": ["Strongly Positive", "Positive", "Neutral", "Negative", "Strongly Negative"]},
-        annotator_group={"cohort_a": [1], "cohort_b": [2, 3]},
+        schema_version_a={
+            "version": "1.0",
+            "labels": [
+                "Positive",
+                "Negative",
+                "Neutral",
+            ],
+        },
+        schema_version_b={
+            "version": "2.0",
+            "labels": [
+                "Strongly Positive",
+                "Positive",
+                "Neutral",
+                "Negative",
+                "Strongly Negative",
+            ],
+        },
+        annotator_group={
+            "cohort_a": [1],
+            "cohort_b": [2, 3],
+        },
         assigned_version="SPLIT_50_50",
         status="active",
     )
+
     db_session.add(exp)
     db_session.commit()
     db_session.refresh(exp)
 
     assert exp.id is not None
     assert exp.experiment_name == "Phase 4 Label Hierarchy Experiment"
-    assert exp.schema_version_a["labels"] == ["Positive", "Negative", "Neutral"]
+    assert exp.schema_version_a["labels"] == [
+        "Positive",
+        "Negative",
+        "Neutral",
+    ]
     assert exp.annotator_group["cohort_a"] == [1]
 
 
@@ -288,8 +588,14 @@ def test_ab_testing_database_model(db_session, sample_project_and_annotators):
 # 4. BACKWARD COMPATIBILITY WITH ALL PRIOR PHASES
 # ==============================================================================
 
-def test_phase1_to_3_apis_continue_working_seamlessly(client, sample_project_and_annotators, db_session):
+
+def test_phase1_to_3_apis_continue_working_seamlessly(
+    client,
+    sample_project_and_annotators,
+    db_session,
+):
     """Verify all prior phase APIs remain 100% operational."""
+
     # 1. Health
     assert client.get("/health").status_code == 200
 
@@ -297,24 +603,42 @@ def test_phase1_to_3_apis_continue_working_seamlessly(client, sample_project_and
     assert client.get("/api/review/queue").status_code == 200
 
     # 3. Project settings GET & PUT
-    assert client.get("/api/projects/1/settings").status_code == 200
-    put_res = client.put("/api/projects/1/settings", json={"gold_threshold": 92.0})
+    assert client.get(
+        "/api/projects/1/settings"
+    ).status_code == 200
+
+    put_res = client.put(
+        "/api/projects/1/settings",
+        json={"gold_threshold": 92.0},
+    )
+
     assert put_res.status_code == 200
     assert put_res.json()["gold_threshold"] == 92.0
 
     # 4. Webhook live ingestion
-    webhook_res = client.post("/api/webhook/annotations", json={
-        "project_id": 1,
-        "item_id": "P4_WEBHOOK_ITEM",
-        "annotator_id": 1,
-        "label": "Positive",
-        "confidence": 0.99,
-    })
+    webhook_res = client.post(
+        "/api/webhook/annotations",
+        json={
+            "project_id": 1,
+            "item_id": "P4_WEBHOOK_ITEM",
+            "annotator_id": 1,
+            "label": "Positive",
+            "confidence": 0.99,
+        },
+    )
+
     assert webhook_res.status_code == 201
 
     # 5. Dashboard Leaderboard & Heatmap
-    assert client.get("/api/dashboard/leaderboard?project_id=1").status_code == 200
-    assert client.get("/api/dashboard/agreement-heatmap?project_id=1").status_code == 200
+    assert client.get(
+        "/api/dashboard/leaderboard?project_id=1"
+    ).status_code == 200
+
+    assert client.get(
+        "/api/dashboard/agreement-heatmap?project_id=1"
+    ).status_code == 200
 
     # 6. Export
-    assert client.get("/api/projects/1/export?format=json").status_code == 200
+    assert client.get(
+        "/api/projects/1/export?format=json"
+    ).status_code == 200
