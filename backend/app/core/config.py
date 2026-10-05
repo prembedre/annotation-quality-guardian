@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     SECRET_KEY: str = "insecure-dev-secret-key-change-in-production"
 
+    # ── JWT Auth ──
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
+
     # ── Server ──
     HOST: str = "0.0.0.0"
     PORT: int = 8000
@@ -110,6 +114,10 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.ENV == EnvironmentType.DEVELOPMENT
+
+    @property
+    def is_testing(self) -> bool:
+        return self.ENV == EnvironmentType.TESTING
 
 
 @lru_cache

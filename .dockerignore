@@ -1,0 +1,51 @@
+# Git & version control
+.git
+.gitignore
+
+# Python caches and virtual environments
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+*/.venv/
+venv/
+*/venv/
+.pytest_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+aqg_dev.db
+backend/aqg_dev.db
+test_migration.db
+
+# Secrets and local environments
+.env
+.env.*
+!.env.example
+
+# Node / Frontend artifacts
+node_modules/
+*/node_modules/
+dist/
+*/dist/
+.vite/
+*/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -23,4 +23,5 @@ export { Pagination } from './Pagination';
 export { DatasetExport } from './DatasetExport';
 export { Toast } from './Toast';
 export { default as AnnotatorAvatar, getAvatarPalette, getInitials } from './AnnotatorAvatar';
-
+export { AuthProvider, useAuth } from './AuthContext';
+export { ProtectedRoute } from './ProtectedRoute';

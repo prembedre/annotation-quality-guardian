@@ -6,7 +6,9 @@ Receives real-time JSON payloads from external annotation tools.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import get_current_user
 from app.core.db import get_db
+from app.models.user import User
 from app.schemas.webhook import (
     WebhookAnnotationPayload,
     WebhookAnnotationResponse,
@@ -28,6 +30,7 @@ router = APIRouter(
     response_model=WebhookAnnotationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Receive real-time annotation webhook payload",
+    dependencies=[Depends(get_current_user)],
 )
 async def receive_annotation_webhook(
     payload: WebhookAnnotationPayload,

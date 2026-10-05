@@ -9,10 +9,12 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import get_current_user, require_role, require_permission
 from app.core.db import get_db
 from app.models.trust_score import TrustScore
 from app.models.project import Project
 from app.models.item import Item
+from app.models.user import User, UserRole
 from app.services.scoring_service import compute_project_scores
 from app.services.export_service import export_csv, export_json
 
@@ -31,6 +33,7 @@ async def list_scores(
         description="Filter by annotator ID",
     ),
     db: Session = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER)),
 ):
     """
     Retrieve computed quality scores (TrustScore records) from the database.
@@ -77,7 +80,9 @@ async def list_scores(
     }
 
 
-@router.post("/compute")
+@router.post("/compute",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
 async def compute_scores(
     project_id: int = Query(..., description="Project ID to compute scores for"),
     db: Session = Depends(get_db),
@@ -164,6 +169,7 @@ async def compute_scores(
 async def get_score_summary(
     project_id: int = Query(..., description="Project ID"),
     db: Session = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER)),
 ):
     """
     Return aggregate score metrics for a project (kappa, gold accuracy, avg trust score).
@@ -212,6 +218,7 @@ async def get_score_summary(
 @router.get("/flagged")
 async def list_flagged_items(
     db: Session = Depends(get_db),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER)),
     page: int = Query(
         1,
         ge=1,
@@ -267,7 +274,9 @@ async def list_flagged_items(
     }
 
 
-@router.get("/export/json")
+@router.get("/export/json",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
 async def export_project_json(
     project_id: int,
     db: Session = Depends(get_db),
@@ -292,7 +301,9 @@ async def export_project_json(
     )
 
 
-@router.get("/export/csv")
+@router.get("/export/csv",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
 async def export_project_csv(
     project_id: int,
     db: Session = Depends(get_db),

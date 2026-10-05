@@ -80,7 +80,9 @@ export default function Scores() {
       try {
         const summaryResp = await api.get('/scores/summary', { params: { project_id: PROJECT_ID } });
         setScoreSummary(summaryResp.data);
-      } catch (_) {}
+      } catch (_) {
+        // Fallback: summary is non-critical for main scores display
+      }
       loadScores();
     } catch (err) {
       console.error('Computation failed:', err);

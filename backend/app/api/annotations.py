@@ -8,8 +8,10 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import get_current_user, require_role
 from app.core.db import get_db
 from app.models import Annotation, Item, Project, Annotator
+from app.models.user import User, UserRole
 from app.schemas.annotation import (
     AnnotationCreate,
     AnnotationResponse,
@@ -21,7 +23,9 @@ from app.services.ingestion_service import ingest_file
 router = APIRouter()
 
 
-@router.post("/upload", response_model=IngestionResponse, summary="Upload CSV/JSON annotation dataset")
+@router.post("/upload", response_model=IngestionResponse, summary="Upload CSV/JSON annotation dataset",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
 async def upload_annotations(
     file: UploadFile = File(..., description="CSV or JSON dataset file"),
     project_id: Optional[int] = Form(None, description="Optional default project ID to assign"),
@@ -70,7 +74,9 @@ async def upload_annotations(
             os.remove(temp_file_path)
 
 
-@router.get("/", response_model=AnnotationListResponse)
+@router.get("/", response_model=AnnotationListResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
 async def list_annotations(
     project_id: Optional[int] = Query(None, description="Filter by project ID"),
     annotator_id: Optional[int] = Query(None, description="Filter by annotator ID"),
@@ -109,7 +115,9 @@ async def list_annotations(
     return {"annotations": items_out, "total": total}
 
 
-@router.get("/{annotation_id}", response_model=AnnotationResponse)
+@router.get("/{annotation_id}", response_model=AnnotationResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
 async def get_annotation(annotation_id: int, db: Session = Depends(get_db)):
     """Retrieve a single annotation by ID."""
     annotation = db.query(Annotation).filter(Annotation.id == annotation_id).first()
@@ -130,7 +138,9 @@ async def get_annotation(annotation_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/", response_model=AnnotationResponse, status_code=201)
+@router.post("/", response_model=AnnotationResponse, status_code=201,
+    dependencies=[Depends(get_current_user)],
+)
 async def create_annotation(payload: AnnotationCreate, db: Session = Depends(get_db)):
     """Create a new single annotation record."""
     # Verify project if exists

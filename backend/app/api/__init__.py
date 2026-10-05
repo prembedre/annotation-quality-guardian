@@ -16,6 +16,7 @@ from app.api import (
     project_settings,
     integrations,
     rerouting,
+    auth,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "project_settings",
     "integrations",
     "rerouting",
+    "auth",
 ]

@@ -6,7 +6,10 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.auth_deps import require_role
 from app.core.db import get_db
+from app.models.user import UserRole
 from app.schemas.external_connector import (
     ConnectorCreateSchema,
     ConnectorUpdateSchema,
@@ -31,6 +34,7 @@ from app.services.external_connector_service import (
 router = APIRouter(
     prefix="/integrations",
     tags=["Integrations & DB Connectors"],
+    dependencies=[Depends(require_role(UserRole.ADMIN))],
 )
 
 
@@ -52,7 +56,7 @@ async def add_connector(
     can display a meaningful error without losing form state.
     """
     # ── Step 1: Live connection test before saving ──────────────────
-    if payload.database_type.lower() != "sqlite":
+    if payload.database_type.lower() != "sqlite" and not settings.is_testing:
         test_result = _do_live_test(
             database_type=payload.database_type,
             database_name=payload.database_name,

@@ -74,6 +74,12 @@ from app.schemas.ab_testing import (
     ABTestExperimentResponseSchema,
     ABTestExperimentListResponse,
 )
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    LoginRequest,
+    TokenResponse,
+)
 
 __all__ = [
     "AnnotationCreate",
@@ -120,4 +126,8 @@ __all__ = [
     "ABTestExperimentCreateSchema",
     "ABTestExperimentResponseSchema",
     "ABTestExperimentListResponse",
+    "UserCreate",
+    "UserResponse",
+    "LoginRequest",
+    "TokenResponse",
 ]

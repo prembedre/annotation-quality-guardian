@@ -1,0 +1,402 @@
+/* ==========================================================================
+   ANNOTATION OPS — MODERN LIGHT LOGIN SYSTEM
+   ========================================================================== */
+
+:root {
+  --ops-bg: #f8fafc;
+  --ops-surface: #ffffff;
+  --ops-surface-subtle: #f1f5f9;
+  --ops-border: #e2e8f0;
+  --ops-border-focus: #6366f1;
+
+  --ops-text-main: #0f172a;
+  --ops-text-muted: #64748b;
+  --ops-text-light: #94a3b8;
+
+  --ops-brand-primary: #4f46e5;
+  --ops-brand-hover: #4338ca;
+  --ops-brand-gradient: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  --ops-brand-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.35);
+
+  --ops-radius-sm: 8px;
+  --ops-radius-md: 12px;
+  --ops-radius-lg: 18px;
+  --ops-radius-full: 9999px;
+
+  --ops-shadow-card: 0 4px 6px -1px rgba(15, 23, 42, 0.04),
+    0 16px 32px -4px rgba(15, 23, 42, 0.06);
+  --ops-shadow-hover: 0 10px 25px -3px rgba(15, 23, 42, 0.08);
+
+  --ops-font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Base layout & atmosphere */
+.ops-login-wrapper {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--ops-bg);
+  font-family: var(--ops-font-family);
+  color: var(--ops-text-main);
+  padding: 2.5rem 1.25rem;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* Background Grids and Ambient Illumination */
+.ops-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    rgba(148, 163, 184, 0.25) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+.ops-bg-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.ops-bg-glow--top-left {
+  top: -100px;
+  left: -100px;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15), transparent 70%);
+}
+
+.ops-bg-glow--bottom-right {
+  bottom: -100px;
+  right: -100px;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.15), transparent 70%);
+}
+
+/* Content Container */
+.ops-login-container {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* Brand Header */
+.ops-brand-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ops-logo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--ops-radius-md);
+  background: var(--ops-brand-gradient);
+  color: #ffffff;
+  box-shadow: var(--ops-brand-shadow);
+  margin-bottom: 0.85rem;
+  transition: transform 0.2s ease;
+}
+
+.ops-logo-badge:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+
+.ops-brand-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--ops-text-main);
+}
+
+.ops-brand-tagline {
+  margin: 0.35rem 0 0;
+  font-size: 0.885rem;
+  color: var(--ops-text-muted);
+  font-weight: 500;
+}
+
+/* Card Surface */
+.ops-card {
+  width: 100%;
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: var(--ops-radius-lg);
+  box-shadow: var(--ops-shadow-card);
+  box-sizing: border-box;
+}
+
+.ops-login-card {
+  padding: 2.25rem 2rem;
+}
+
+.ops-card-header {
+  margin-bottom: 1.75rem;
+}
+
+.ops-card-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ops-text-main);
+}
+
+.ops-card-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ops-text-muted);
+  line-height: 1.45;
+}
+
+/* Error Banner */
+.ops-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 0.75rem 1rem;
+  border-radius: var(--ops-radius-sm);
+  font-size: 0.825rem;
+  font-weight: 500;
+  margin-bottom: 1.25rem;
+  animation: ops-shake 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.ops-error-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  flex-shrink: 0;
+}
+
+/* Form Fields */
+.ops-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.ops-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ops-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ops-label {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.ops-forgot-link {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ops-brand-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.ops-forgot-link:hover {
+  color: var(--ops-brand-hover);
+  text-decoration: underline;
+}
+
+.ops-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ops-field-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--ops-text-light);
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.ops-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.65rem;
+  font-size: 0.925rem;
+  color: var(--ops-text-main);
+  background-color: #ffffff;
+  border: 1.5px solid var(--ops-border);
+  border-radius: var(--ops-radius-sm);
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.ops-input::placeholder {
+  color: var(--ops-text-light);
+}
+
+.ops-input:focus {
+  border-color: var(--ops-border-focus);
+  box-shadow: 0 0 0 3.5px rgba(99, 102, 241, 0.12);
+}
+
+.ops-input-wrapper:focus-within .ops-field-icon {
+  color: var(--ops-brand-primary);
+}
+
+.ops-input--password {
+  padding-right: 2.75rem;
+}
+
+.ops-pw-toggle {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--ops-text-light);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.ops-pw-toggle:hover {
+  color: var(--ops-text-main);
+}
+
+/* Primary Button */
+.ops-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.825rem 1.25rem;
+  margin-top: 0.5rem;
+  background: var(--ops-brand-gradient);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--ops-radius-sm);
+  font-size: 0.935rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--ops-brand-shadow);
+  transition: all 0.2s ease;
+}
+
+.ops-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px -5px rgba(79, 70, 229, 0.45);
+}
+
+.ops-btn-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+.ops-btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Footer Link */
+.ops-card-footer {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--ops-text-muted);
+  margin-top: 0.5rem;
+}
+
+.ops-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ops-brand-primary);
+  font-weight: 600;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ops-link-btn:hover {
+  text-decoration: underline;
+  color: var(--ops-brand-hover);
+}
+
+/* Spinner helper */
+.ops-spin {
+  animation: ops-spin 0.8s linear infinite;
+}
+
+@keyframes ops-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ops-shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-3px, 0, 0); }
+  40%, 60% { transform: translate3d(3px, 0, 0); }
+}
+
+/* Meta Footer */
+.ops-meta-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.725rem;
+  color: var(--ops-text-light);
+  margin-top: 0.25rem;
+}
+
+.ops-meta-sep {
+  opacity: 0.5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 520px) {
+  .ops-login-wrapper {
+    padding: 1.5rem 1rem;
+  }
+
+  .ops-login-card {
+    padding: 1.75rem 1.25rem;
+  }
+}
+

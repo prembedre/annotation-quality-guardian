@@ -8,10 +8,12 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
 from app.models.ab_test_experiment import ABTestExperiment
 from app.models.annotation import Annotation
 from app.models.item import Item
+from app.models.user import UserRole
 from app.schemas.ab_testing import (
     ABTestExperimentCreateSchema,
     ABTestExperimentListResponse,
@@ -27,6 +29,7 @@ router = APIRouter(prefix="/ab-testing", tags=["A/B Testing"])
 @router.get(
     "/experiments",
     response_model=ABTestExperimentListResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 def list_experiments(
     project_id: int | None = None,
@@ -51,6 +54,7 @@ def list_experiments(
 @router.post(
     "/experiments",
     response_model=ABTestExperimentResponseSchema,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
 )
 def create_experiment(
     payload: ABTestExperimentCreateSchema,
@@ -78,6 +82,7 @@ def create_experiment(
 @router.get(
     "/experiments/{experiment_id}",
     response_model=ABTestExperimentResponseSchema,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 def get_experiment(
     experiment_id: int,
@@ -100,7 +105,9 @@ def get_experiment(
     return experiment
 
 
-@router.get("/experiments/{experiment_id}/results")
+@router.get("/experiments/{experiment_id}/results",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
 def get_experiment_results(
     experiment_id: int,
     db: Session = Depends(get_db),

@@ -10,14 +10,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
 from app.models import Project, Item, Annotation, Annotator, TrustScore
+from app.models.user import UserRole
 from app.schemas.export import DatasetExportResponse, DatasetExportItem, ExportItemAnnotation
 
 router = APIRouter()
 
 
-@router.get("/{project_id}/export", summary="Export dataset with trust scores")
+@router.get("/{project_id}/export", summary="Export dataset with trust scores",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
 async def export_project_dataset(
     project_id: int,
     format: str = Query("csv", description="Output format: 'csv' or 'json'"),

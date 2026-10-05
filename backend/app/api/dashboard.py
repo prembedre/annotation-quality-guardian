@@ -6,7 +6,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
+from app.models.user import UserRole
 from app.schemas.dashboard import (
     DashboardLeaderboardResponse,
     DashboardAgreementHeatmapResponse,
@@ -26,6 +28,7 @@ router = APIRouter(
     "/leaderboard",
     response_model=DashboardLeaderboardResponse,
     summary="Get annotator quality and volume leaderboard",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 async def get_leaderboard(
     project_id: Optional[int] = Query(
@@ -51,6 +54,7 @@ async def get_leaderboard(
     "/agreement-heatmap",
     response_model=DashboardAgreementHeatmapResponse,
     summary="Get inter-annotator agreement heatmap matrix",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 async def get_heatmap(
     project_id: int = Query(

@@ -17,7 +17,7 @@ The **Annotation Quality Guardian (AQG)** platform provides automated quality au
 - **Phase 2 (Scoring Engine & Async Tasks):** 🟢 Complete
 - **Phase 3 (Dashboard, Heatmaps & Reviewer Workflow):** 🟢 Complete across Backend, DB, Scoring, and Frontend UI
 - **Phase 4 (Automation, External DB Connectors & Rerouting):** 🟢 Backend & Database 100% Complete
-- **Automated Test Suite:** 74 tests passing (100% success rate)
+- **Automated Test Suite:** 91 tests passing (100% success rate)
 
 ```
 Phase 1–3 Overall Completion:

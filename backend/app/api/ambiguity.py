@@ -1,4 +1,4 @@
-﻿"""
+"""
 Ambiguous class insights API.
 
 Exposes Member 3's ambiguity detection logic to the frontend.
@@ -9,8 +9,10 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
 from app.models.annotation import Annotation
+from app.models.user import UserRole
 from scoring.automation.ambiguity import detect_ambiguous_classes
 
 
@@ -20,7 +22,9 @@ router = APIRouter(
 )
 
 
-@router.get("/classes")
+@router.get("/classes",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
 def get_ambiguous_classes(
     project_id: int = Query(1, ge=1),
     disagreement_threshold: float = Query(

@@ -1,0 +1,22 @@
+services:
+  backend:
+    environment:
+      ENV: development
+      DEBUG: "True"
+    volumes:
+      - ./backend:/app/backend
+      - ./scoring:/app/scoring
+      - ./pytest.ini:/app/pytest.ini
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

@@ -31,6 +31,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Check,
+  UserCircle,
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -42,6 +43,8 @@ import Integrations from './pages/Integrations';
 import AutomationDashboard from './pages/AutomationDashboard';
 import ABTesting from './pages/ABTesting';
 import AmbiguityInsights from './pages/AmbiguityInsights';
+import Login from './pages/Login';
+import Unauthorized from './pages/Unauthorized';
 
 import {
   ThemeProvider,
@@ -50,31 +53,91 @@ import {
   useToast,
   CommandPalette,
   SystemHealthModal,
+  AuthProvider,
+  useAuth,
+  ProtectedRoute,
 } from './components';
+
+// ── Role constants (mirror backend UserRole enum values) ──────────────────────
+
+const ROLES = {
+  ADMIN: 'admin',
+  PROJECT_MANAGER: 'project_manager',
+  REVIEWER: 'reviewer',
+  ANNOTATOR: 'annotator',
+};
+
+// ── Navigation structure with role restrictions ───────────────────────────────
 
 const NAV_GROUPS = [
   {
     title: 'Monitor',
     items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-      { to: '/scores', label: 'Scores', icon: Award },
-      { to: '/review-queue', label: 'Review Queue', icon: CheckSquare },
-      { to: '/ambiguity', label: 'Ambiguous Classes', icon: AlertTriangle },
+      {
+        to: '/',
+        label: 'Dashboard',
+        icon: LayoutDashboard,
+        end: true,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.REVIEWER, ROLES.ANNOTATOR],
+      },
+      {
+        to: '/scores',
+        label: 'Scores',
+        icon: Award,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.REVIEWER, ROLES.ANNOTATOR],
+      },
+      {
+        to: '/review-queue',
+        label: 'Review Queue',
+        icon: CheckSquare,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.REVIEWER, ROLES.ANNOTATOR],
+      },
+      {
+        to: '/ambiguity',
+        label: 'Ambiguous Classes',
+        icon: AlertTriangle,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.REVIEWER, ROLES.ANNOTATOR],
+      },
     ],
   },
   {
     title: 'Configure',
     items: [
-      { to: '/project-settings', label: 'Project Settings', icon: Sliders },
-      { to: '/integrations', label: 'Integrations', icon: Database },
-      { to: '/automation', label: 'Automation', icon: Bot },
-      { to: '/ab-testing', label: 'A/B Testing', icon: GitCompare },
+      {
+        to: '/project-settings',
+        label: 'Project Settings',
+        icon: Sliders,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.REVIEWER, ROLES.ANNOTATOR],
+      },
+      {
+        to: '/integrations',
+        label: 'Integrations',
+        icon: Database,
+        allowedRoles: [ROLES.ADMIN],
+      },
+      {
+        to: '/automation',
+        label: 'Automation',
+        icon: Bot,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER],
+      },
+      {
+        to: '/ab-testing',
+        label: 'A/B Testing',
+        icon: GitCompare,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.REVIEWER, ROLES.ANNOTATOR],
+      },
     ],
   },
   {
     title: 'Data',
     items: [
-      { to: '/projects', label: 'Projects', icon: FolderGit2 },
+      {
+        to: '/projects',
+        label: 'Projects',
+        icon: FolderGit2,
+        allowedRoles: [ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.REVIEWER, ROLES.ANNOTATOR],
+      },
     ],
   },
 ];
@@ -96,6 +159,22 @@ function getBreadcrumb(pathname) {
   return { group: 'Overview', page: 'Dashboard', path: '/' };
 }
 
+// ── Role label helper ─────────────────────────────────────────────────────────
+
+function formatRole(role) {
+  if (!role) return '';
+  return role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getInitialsFromUser(user) {
+  if (!user) return '??';
+  const parts = (user.full_name || user.email || '').trim().split(' ');
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return (parts[0] || '').slice(0, 2).toUpperCase();
+}
+
+// ── Navigation Shell ──────────────────────────────────────────────────────────
+
 function NavigationShell({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -111,6 +190,7 @@ function NavigationShell({ children }) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { info } = useToast();
+  const { user, logout } = useAuth();
   const breadcrumb = getBreadcrumb(location.pathname);
 
   const closeMobile = () => setMobileOpen(false);
@@ -131,6 +211,15 @@ function NavigationShell({ children }) {
     p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
     p.env.toLowerCase().includes(projectSearch.toLowerCase())
   );
+
+  // Filter nav items by current user's role
+  const userRole = user?.role;
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item) => !item.allowedRoles || !userRole || item.allowedRoles.includes(userRole)
+    ),
+  })).filter((g) => g.items.length > 0);
 
   return (
     <div className="app">
@@ -259,9 +348,9 @@ function NavigationShell({ children }) {
           </div>
         )}
 
-        {/* Grouped Navigation */}
+        {/* Grouped Navigation — filtered by role */}
         <nav className="sidebar-content">
-          {NAV_GROUPS.map((group) => (
+          {visibleGroups.map((group) => (
             <div key={group.title}>
               <div className="nav-section-title">{group.title}</div>
               <ul className="sidebar-nav-list">
@@ -304,24 +393,38 @@ function NavigationShell({ children }) {
           </div>
         )}
 
-        {/* User Avatar & Account Footer */}
+        {/* User Avatar & Account Footer — now connected to real auth */}
         <div className="sidebar-footer">
           <button
             type="button"
             className="user-profile-btn"
             onClick={() => setUserMenuOpen(!userMenuOpen)}
           >
-            <div className="user-avatar">AG</div>
+            <div className="user-avatar">{getInitialsFromUser(user)}</div>
             {!collapsed && (
               <div className="user-info-text">
-                <span className="user-name">Alex Guardian</span>
-                <span className="user-role">Lead QA Engineer</span>
+                <span className="user-name">{user?.full_name || user?.email || 'Loading…'}</span>
+                <span className="user-role">{formatRole(user?.role)}</span>
               </div>
             )}
           </button>
 
           {userMenuOpen && (
             <div className="user-dropdown-menu">
+              {/* Role badge */}
+              {user && (
+                <div
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: '0.7rem',
+                    color: 'var(--text-muted)',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    marginBottom: '3px',
+                  }}
+                >
+                  Signed in as <strong style={{ color: 'var(--accent-brand)' }}>{formatRole(user.role)}</strong>
+                </div>
+              )}
               <button
                 type="button"
                 className="user-menu-item"
@@ -346,10 +449,11 @@ function NavigationShell({ children }) {
               </button>
               <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '3px 0' }} />
               <button
+                id="sidebar-logout-btn"
                 type="button"
                 className="user-menu-item"
                 onClick={() => {
-                  info('Session demo logged out');
+                  logout();
                   setUserMenuOpen(false);
                 }}
               >
@@ -473,24 +577,113 @@ function NavigationShell({ children }) {
   );
 }
 
+// ── App ───────────────────────────────────────────────────────────────────────
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public routes (no NavigationShell) */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/unauthorized" element={<Unauthorized />} />
+
+      {/* Protected routes (inside NavigationShell) */}
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <NavigationShell>
+              <Routes>
+                {/* Dashboard — Reviewer+ */}
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'project_manager', 'reviewer', 'annotator']}>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Projects — any authenticated */}
+                <Route path="/projects" element={<Projects />} />
+                {/* Scores — Reviewer+ */}
+                <Route
+                  path="/scores"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'project_manager', 'reviewer', 'annotator']}>
+                      <Scores />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Review Queue — Reviewer+ */}
+                <Route
+                  path="/review-queue"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'project_manager', 'reviewer', 'annotator']}>
+                      <ReviewQueue />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Project Settings — Reviewer+ */}
+                <Route
+                  path="/project-settings"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'project_manager', 'reviewer', 'annotator']}>
+                      <ProjectSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Integrations — Admin only */}
+                <Route
+                  path="/integrations"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <Integrations />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Automation — Project Manager+ */}
+                <Route
+                  path="/automation"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'project_manager']}>
+                      <AutomationDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* A/B Testing — Reviewer+ */}
+                <Route
+                  path="/ab-testing"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'project_manager', 'reviewer', 'annotator']}>
+                      <ABTesting />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Ambiguity Insights — Reviewer+ */}
+                <Route
+                  path="/ambiguity"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin', 'project_manager', 'reviewer', 'annotator']}>
+                      <AmbiguityInsights />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </NavigationShell>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
         <Router>
-          <NavigationShell>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/scores" element={<Scores />} />
-              <Route path="/review-queue" element={<ReviewQueue />} />
-              <Route path="/project-settings" element={<ProjectSettings />} />
-              <Route path="/integrations" element={<Integrations />} />
-              <Route path="/automation" element={<AutomationDashboard />} />
-              <Route path="/ab-testing" element={<ABTesting />} />
-              <Route path="/ambiguity" element={<AmbiguityInsights />} />
-            </Routes>
-          </NavigationShell>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
         </Router>
       </ToastProvider>
     </ThemeProvider>

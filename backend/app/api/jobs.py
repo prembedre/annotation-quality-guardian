@@ -4,10 +4,12 @@ API routes for asynchronous background jobs (Celery + Redis).
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from celery.result import AsyncResult
 
 from app.celery_app import celery_app
+from app.core.auth_deps import get_current_user, require_role
+from app.models.user import User, UserRole
 from app.tasks.behavioral_tasks import compute_behavioral_score_task
 from app.tasks.embedding_tasks import process_project_embeddings_task
 from app.tasks.trust_score_tasks import compute_project_trust_scores_task, compute_item_trust_score_task
@@ -24,7 +26,9 @@ router = APIRouter(
 )
 
 
-@router.post("/behavioral", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/behavioral", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
 async def submit_behavioral_job(payload: BehavioralJobRequest):
     """
     Trigger an asynchronous behavioral anomaly computation job.
@@ -55,7 +59,9 @@ async def submit_behavioral_job(payload: BehavioralJobRequest):
         )
 
 
-@router.post("/embedding", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/embedding", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
 async def submit_embedding_job(payload: EmbeddingJobRequest):
     """
     Trigger an asynchronous embedding outlier calculation job for a project.
@@ -80,7 +86,9 @@ async def submit_embedding_job(payload: EmbeddingJobRequest):
         )
 
 
-@router.post("/trust-score", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/trust-score", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
 async def submit_trust_score_job(payload: TrustScoreJobRequest):
     """
     Trigger an asynchronous multi-signal unified trust score calculation job.
@@ -112,7 +120,9 @@ async def submit_trust_score_job(payload: TrustScoreJobRequest):
         )
 
 
-@router.get("/{job_id}", response_model=JobStatusResponse)
+@router.get("/{job_id}", response_model=JobStatusResponse,
+    dependencies=[Depends(get_current_user)],
+)
 async def get_job_status(job_id: str):
     """
     Retrieve current status, completion timestamp, and result of an async background job.

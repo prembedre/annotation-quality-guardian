@@ -6,7 +6,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
+from app.models.user import UserRole
 from app.schemas.rerouting import (
     ReroutePendingListResponse,
     RerouteAssignRequest,
@@ -32,11 +34,13 @@ automation_router = APIRouter(
     "/pending",
     response_model=ReroutePendingListResponse,
     summary="Get pending task rerouting queue",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 @automation_router.get(
     "/pending",
     response_model=ReroutePendingListResponse,
     summary="Get pending task automation queue (alias)",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 async def list_pending_reroutes(
     project_id: Optional[int] = Query(None, description="Filter pending reroutes by project ID"),
@@ -55,6 +59,7 @@ async def list_pending_reroutes(
     "/{item_id}/assign",
     response_model=RerouteAssignResponse,
     summary="Assign or reassign task to an annotator",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
 )
 async def assign_reroute(
     item_id: int,

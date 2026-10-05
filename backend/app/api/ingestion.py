@@ -8,7 +8,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
+from app.models.user import UserRole
 from app.schemas.ingestion import IngestionResponse
 from app.services.ingestion_service import ingest_file
 
@@ -18,7 +20,9 @@ router = APIRouter(
 )
 
 
-@router.post("/upload", response_model=IngestionResponse)
+@router.post("/upload", response_model=IngestionResponse,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
 async def upload_file(
     file: UploadFile = File(..., description="CSV or JSON file"),
     project_id: Optional[int] = Form(None, description="Optional target project ID"),

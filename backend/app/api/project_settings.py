@@ -8,7 +8,9 @@ quality thresholds and Phase 4 automation controls.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
+from app.models.user import UserRole
 from app.schemas.project_settings import (
     ProjectSettingsSchema,
     ProjectSettingsUpdateSchema,
@@ -28,6 +30,7 @@ router = APIRouter(
 @router.get(
     "/{project_id}/settings",
     response_model=ProjectSettingsSchema,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 def get_settings(
     project_id: int,
@@ -52,6 +55,7 @@ def get_settings(
 @router.put(
     "/{project_id}/settings",
     response_model=ProjectSettingsSchema,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
 )
 def update_settings(
     project_id: int,

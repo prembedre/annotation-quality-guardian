@@ -10,8 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import require_role
 from app.core.db import get_db
 from app.models import Item, Annotation, TrustScore, Annotator
+from app.models.user import UserRole
 from app.schemas.review import (
     ReviewQueueResponse,
     ReviewItemResponse,
@@ -30,6 +32,7 @@ router = APIRouter()
     "/queue",
     response_model=ReviewQueueResponse,
     summary="Retrieve flagged review queue",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 async def get_review_queue(
     project_id: Optional[int] = Query(
@@ -307,6 +310,7 @@ async def get_review_queue(
     "/{item_id}/resolve",
     response_model=ReviewResolveResponse,
     summary="Resolve flagged item",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
 )
 async def resolve_review_item(
     item_id: int,

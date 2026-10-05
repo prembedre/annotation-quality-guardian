@@ -285,6 +285,46 @@ def seed_demo_data():
             db.commit()
             print("  * Seeded pending task reroute for Automation Dashboard")
 
+        # 8. Seed sample external database connectors
+        from app.models.external_db_connector import ExternalDBConnector
+        connector_count = db.query(ExternalDBConnector).count()
+        if connector_count == 0:
+            now = datetime.now(timezone.utc)
+            conn1 = ExternalDBConnector(
+                connection_name="Local Dev Warehouse (SQLite)",
+                database_type="sqlite",
+                host=None,
+                port=None,
+                database_name="aqg_dev.db",
+                username=None,
+                password_encrypted=None,
+                status="active",
+                read_only=True,
+                query_config={"table_name": "annotations"},
+                synced_rows_count=40,
+                last_tested_at=now,
+                last_sync_at=now,
+            )
+            conn2 = ExternalDBConnector(
+                connection_name="Primary Staging Warehouse (PostgreSQL)",
+                database_type="postgresql",
+                host="localhost",
+                port=5432,
+                database_name="aqg_db",
+                username="postgres",
+                password_encrypted="postgres",
+                status="active",
+                read_only=True,
+                query_config={"table_name": "external_annotations"},
+                synced_rows_count=1250,
+                last_tested_at=now,
+                last_sync_at=now,
+            )
+            db.add(conn1)
+            db.add(conn2)
+            db.commit()
+            print("  * Seeded sample Database Connectors")
+
         print("[OK] Demo data seeding completed successfully!")
     finally:
         db.close()

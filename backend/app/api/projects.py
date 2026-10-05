@@ -9,8 +9,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import get_current_user, require_role
 from app.core.db import get_db
 from app.models.project import Project
+from app.models.user import User, UserRole
 from app.schemas.project import ProjectCreate, ProjectResponse
 
 
@@ -26,6 +28,7 @@ router = APIRouter(
 )
 def list_projects(
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ):
     """List all annotation projects. If empty, seed default Project 1."""
 
@@ -57,6 +60,7 @@ def list_projects(
 def get_project(
     project_id: int,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ):
     """Get a project by ID."""
 
@@ -79,6 +83,7 @@ def get_project(
     "",
     response_model=ProjectResponse,
     status_code=201,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
 )
 def create_project(
     project_data: ProjectCreate,

@@ -38,6 +38,7 @@ from app.api import (
     rerouting,
     ab_testing,
     ambiguity,
+    auth,
 )
 
 
@@ -86,6 +87,12 @@ app.add_middleware(
 # ── Include Routers ────────────────────────────────────────────────
 
 app.include_router(health.router)
+
+app.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["Auth"],
+)
 
 app.include_router(
     annotations.router,
