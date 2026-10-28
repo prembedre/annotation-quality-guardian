@@ -104,3 +104,29 @@ def test_compute_and_save_item_trust_score(db_session):
     summary = compute_and_save_project_trust_scores(db=db_session, project_id=230)
     assert summary["total_items_processed"] == 1
     assert summary["status"] == "completed"
+
+
+def test_calculate_trust_score_no_signals():
+    """Verify current behavior when all scoring signals are unavailable."""
+    score, breakdown, flagged, reason = calculate_trust_score()
+
+    # Document current behavior; decide separately whether it is appropriate.
+    assert score == 1.0
+    assert breakdown["weights_applied"] == {}
+    assert flagged is False
+    assert reason is None
+
+
+def test_calculate_trust_score_boundary_values():
+    """Verify trust score remains within the expected range."""
+    score, breakdown, flagged, reason = calculate_trust_score(
+        gold_score=0.0,
+        agreement_score=-1.0,
+        behavioral_score=0.0,
+        embedding_score=0.0,
+    )
+
+    assert score == 0.0
+    assert 0.0 <= score <= 1.0
+    assert flagged is True
+    assert "below threshold" in reason
