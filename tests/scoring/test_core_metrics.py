@@ -177,3 +177,41 @@ def test_fleiss_kappa_rejects_fractional_counts():
 
     with pytest.raises(ValueError):
         fleiss_kappa(ratings)
+
+
+def test_fleiss_kappa_rejects_one_dimensional_input():
+    import pytest
+    from scoring.agreement.kappa import fleiss_kappa
+
+    with pytest.raises(ValueError, match="two-dimensional"):
+        fleiss_kappa([1, 2, 3])
+
+
+def test_fleiss_kappa_rejects_single_category():
+    import pytest
+    from scoring.agreement.kappa import fleiss_kappa
+
+    with pytest.raises(ValueError, match="at least two categories"):
+        fleiss_kappa([[3]])
+
+
+def test_fleiss_kappa_rejects_non_finite_counts():
+    import pytest
+    from scoring.agreement.kappa import fleiss_kappa
+
+    with pytest.raises(ValueError, match="finite numbers"):
+        fleiss_kappa([[float("nan"), 2], [1, 2]])
+
+
+def test_fleiss_kappa_rejects_empty_matrix():
+    import pytest
+    from scoring.agreement.kappa import fleiss_kappa
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        fleiss_kappa([])
+
+
+def test_fleiss_kappa_returns_one_for_perfect_expected_agreement():
+    from scoring.agreement.kappa import fleiss_kappa
+
+    assert fleiss_kappa([[3, 0], [3, 0]]) == 1.0
