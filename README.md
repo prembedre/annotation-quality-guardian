@@ -2,7 +2,7 @@
 
 **Automated annotation quality control and auditing system for monitoring, scoring, and improving labeled datasets.**
 
-AQG combines gold-standard validation, inter-annotator agreement metrics, behavioral anomaly detection, and embedding-based outlier analysis to help teams maintain reliable annotation quality.
+AQG combines gold-standard validation and  inter-annotator agreement metrics, behavioral anomaly detection, and embedding-based outlier analysis to help teams maintain reliable annotation quality.
 
 ## ✨ Features
 
