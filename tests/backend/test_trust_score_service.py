@@ -21,21 +21,72 @@ def test_normalize_signal():
     assert normalize_signal(None, "behavioral") is None
 
 
+def test_normalize_signal_inversion():
+    """Verify anomaly and outlier scores are inverted so 1.0 = bad → low trust."""
+    # High anomaly (1.0 = maximally anomalous) → 0.0 trust
+    assert normalize_signal(1.0, "behavioral") == 0.0
+    # Low anomaly (0.0 = normal) → 1.0 trust
+    assert normalize_signal(0.0, "behavioral") == 1.0
+    # Mid anomaly
+    assert normalize_signal(0.5, "behavioral") == 0.5
+
+    # High outlier (1.0 = strong outlier) → 0.0 trust
+    assert normalize_signal(1.0, "embedding") == 0.0
+    # Low outlier (0.0 = inlier) → 1.0 trust
+    assert normalize_signal(0.0, "embedding") == 1.0
+
+    # Gold accuracy should NOT be inverted
+    assert normalize_signal(1.0, "gold") == 1.0
+    assert normalize_signal(0.0, "gold") == 0.0
+
+
+def test_high_anomaly_gives_low_trust():
+    """A high anomaly score (0.95) should result in a low trust score."""
+    score, breakdown, flagged, reason = calculate_trust_score(
+        gold_score=None,
+        agreement_score=None,
+        behavioral_score=0.95,  # raw anomaly: 0.95 = very anomalous
+        embedding_score=None,
+    )
+    # normalize_signal inverts: 1.0 - 0.95 = 0.05
+    assert score <= 0.10
+    assert flagged is True
+    assert "below threshold" in reason
+
+
+def test_low_anomaly_gives_high_trust():
+    """A low anomaly score (0.05) should result in a high trust score."""
+    score, breakdown, flagged, reason = calculate_trust_score(
+        gold_score=None,
+        agreement_score=None,
+        behavioral_score=0.05,  # raw anomaly: 0.05 = nearly normal
+        embedding_score=None,
+    )
+    # normalize_signal inverts: 1.0 - 0.05 = 0.95
+    assert score >= 0.90
+    assert flagged is False
+
+
 def test_calculate_trust_score_all_signals():
-    """Test unified trust calculation with all 4 signals present."""
-    # Gold=1.0, Agreement Kappa=1.0 (normalized 1.0), Behavioral=0.9, Embedding=0.8
+    """Test unified trust calculation with all 4 signals present.
+
+    Inputs are raw scores:
+      - gold=1.0 (accuracy), agreement kappa=1.0
+      - behavioral anomaly=0.1 (low anomaly → inverted to 0.9)
+      - embedding outlier=0.2 (low outlier → inverted to 0.8)
+    """
     score, breakdown, flagged, reason = calculate_trust_score(
         gold_score=1.0,
         agreement_score=1.0,
-        behavioral_score=0.9,
-        embedding_score=0.8,
+        behavioral_score=0.1,   # raw anomaly → inverted to 0.9
+        embedding_score=0.2,    # raw outlier → inverted to 0.8
     )
-    # Expected: 1.0*0.35 + 1.0*0.25 + 0.9*0.20 + 0.8*0.20 = 0.35 + 0.25 + 0.18 + 0.16 = 0.94
+    # Expected: 1.0*0.35 + 1.0*0.25 + 0.9*0.20 + 0.8*0.20 = 0.94
     assert round(score, 2) == 0.94
     assert flagged is False
     assert breakdown["gold"] == 1.0
-    assert breakdown["behavioral"] == 0.9
-    assert breakdown["embedding"] == 0.8
+    assert breakdown["behavioral"] == 0.9  # inverted from 0.1
+    assert breakdown["embedding"] == 0.8   # inverted from 0.2
 
 
 def test_calculate_trust_score_missing_signals_redistribution():
@@ -57,21 +108,22 @@ def test_calculate_trust_score_missing_signals_redistribution():
 def test_calculate_trust_score_flagging_conditions():
     """Test flagging triggered by score threshold, anomaly flag, or outlier."""
     # Score below threshold (0.60)
+    # behavioral=0.7 → inverted to 0.3, embedding=0.7 → inverted to 0.3
     score, breakdown, flagged, reason = calculate_trust_score(
         gold_score=0.2,
         agreement_score=-0.5,
-        behavioral_score=0.3,
-        embedding_score=0.3,
+        behavioral_score=0.7,
+        embedding_score=0.7,
     )
     assert flagged is True
     assert "below threshold" in reason
 
-    # Outlier flag overrides
+    # Outlier flag overrides even if score is OK
     score2, breakdown2, flagged2, reason2 = calculate_trust_score(
         gold_score=0.9,
         agreement_score=0.8,
-        behavioral_score=0.9,
-        embedding_score=0.9,
+        behavioral_score=0.1,   # low anomaly → 0.9 trust contribution
+        embedding_score=0.1,    # low outlier → 0.9 trust contribution
         is_outlier=True,
     )
     assert flagged2 is True

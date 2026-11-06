@@ -56,13 +56,14 @@ def normalize_signal(value: Optional[float], signal_type: str) -> Optional[float
         return max(0.0, min(1.0, normalized))
 
     elif signal_type == "behavioral":
-        # If input represents anomaly_score (where 1.0 = anomaly), convert to quality trust metric (1.0 - anomaly)
-        # Otherwise ensure [0.0, 1.0] range
-        return max(0.0, min(1.0, val))
+        # Anomaly score: 1.0 = anomalous (bad). Invert so 1.0 = trustworthy.
+        inverted = 1.0 - val
+        return max(0.0, min(1.0, inverted))
 
     elif signal_type == "embedding":
-        # If input is outlier_score, quality trust metric is (1.0 - outlier)
-        return max(0.0, min(1.0, val))
+        # Outlier score: 1.0 = strong outlier (bad). Invert so 1.0 = trustworthy.
+        inverted = 1.0 - val
+        return max(0.0, min(1.0, inverted))
 
     return max(0.0, min(1.0, val))
 
@@ -199,9 +200,8 @@ def compute_and_save_item_trust_score(
     behavioral_score = None
     anomaly_flag = False
     if behavioral_rec:
-        # Convert anomaly score (0=normal, 1=anomaly) to quality score (1-anomaly)
-        raw_anomaly = float(behavioral_rec.anomaly_score) if behavioral_rec.anomaly_score is not None else 0.0
-        behavioral_score = 1.0 - raw_anomaly
+        # Pass raw anomaly score; normalize_signal inverts it (1.0 - val)
+        behavioral_score = float(behavioral_rec.anomaly_score) if behavioral_rec.anomaly_score is not None else 0.0
         anomaly_flag = behavioral_rec.details.get("anomaly_flag", False) if behavioral_rec.details else False
 
     # 4. Embedding score
@@ -217,8 +217,8 @@ def compute_and_save_item_trust_score(
     embedding_score = None
     is_outlier = False
     if embedding_rec:
-        raw_outlier = float(embedding_rec.outlier_score) if embedding_rec.outlier_score is not None else 0.0
-        embedding_score = 1.0 - raw_outlier
+        # Pass raw outlier score; normalize_signal inverts it (1.0 - val)
+        embedding_score = float(embedding_rec.outlier_score) if embedding_rec.outlier_score is not None else 0.0
         is_outlier = embedding_rec.is_outlier
 
     # Calculate unified score
