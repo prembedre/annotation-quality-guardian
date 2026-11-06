@@ -90,13 +90,17 @@ export default function AmbiguityInsights() {
     return sortAsc ? valA - valB : valB - valA;
   });
 
-  // Confusion Matrix categories (Sentiment categories)
-  const confusionCategories = ['Positive', 'Neutral', 'Negative'];
-  const confusionData = [
-    [0.91, 0.07, 0.02],
-    [0.18, 0.74, 0.08], // Notice Neutral vs Positive has high confusion 18%!
-    [0.03, 0.11, 0.86],
-  ];
+  // Confusion matrix and recommendations from backend
+  const confusionInfo = data?.confusion_matrix || {
+    categories: [],
+    matrix: [],
+    total_pairs_evaluated: 0,
+    top_confusion_pair: null,
+    top_confusion_rate: 0,
+  };
+  const confusionCategories = confusionInfo.categories || [];
+  const confusionData = confusionInfo.matrix || [];
+  const recommendations = data?.recommendations || [];
 
   if (!projectId) {
     return (
@@ -134,39 +138,71 @@ export default function AmbiguityInsights() {
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div
-            style={{
-              padding: '0.85rem 1rem',
-              background: 'var(--bg-subtle)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-sm)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-brand)', fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>
-              <Sparkles size={15} />
-              <span>Recommendation 1: Clarify Boundary for &apos;Neutral&apos;</span>
+          {recommendations.length === 0 ? (
+            <div
+              style={{
+                padding: '0.85rem 1rem',
+                background: 'var(--bg-subtle)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+                fontSize: '0.85rem',
+              }}
+            >
+              No specific taxonomy interventions required at this time.
             </div>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              78% of all disagreements stem from subtle positive statements being labeled as Neutral. Add explicit positive threshold markers (e.g. &apos;satisfactory&apos; = mild positive, not neutral) to your task guidelines.
-            </p>
-          </div>
+          ) : (
+            recommendations.map((rec, idx) => {
+              const isHigh = rec.severity === 'high';
+              const isLow = rec.severity === 'low';
+              const iconColor = isHigh
+                ? 'var(--status-risk-text)'
+                : isLow
+                ? 'var(--status-good-text)'
+                : 'var(--accent-brand)';
+              const Icon = isHigh ? AlertTriangle : isLow ? CheckCircle2 : Sparkles;
 
-          <div
-            style={{
-              padding: '0.85rem 1rem',
-              background: 'var(--bg-subtle)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-sm)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--status-good-text)', fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>
-              <BookOpen size={15} />
-              <span>Recommendation 2: Launch A/B Guidelines Experiment</span>
-            </div>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Compare an updated guideline document containing 5 boundary contrastive examples against the current baseline using the A/B Testing module.
-            </p>
-          </div>
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '0.85rem 1rem',
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: iconColor,
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    <Icon size={15} />
+                    <span>
+                      Recommendation {idx + 1}: {rec.title}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      fontSize: '0.78rem',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.5,
+                      margin: 0,
+                    }}
+                  >
+                    {rec.detail}
+                  </p>
+                </div>
+              );
+            })
+          )}
         </div>
       </Modal>
 
@@ -292,70 +328,96 @@ export default function AmbiguityInsights() {
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: `100px repeat(${confusionCategories.length}, 1fr)`,
-                gap: '4px',
-                textAlign: 'center',
-              }}
-            >
-              <div />
-              {confusionCategories.map((c) => (
-                <div key={`col-${c}`} className="eyebrow" style={{ padding: '0.4rem' }}>
-                  {c}
-                </div>
-              ))}
+          {confusionCategories.length === 0 || confusionData.length === 0 ? (
+            <EmptyState
+              title="No Confusion Matrix Data"
+              description="Not enough multi-annotator overlap to compute pairwise confusion."
+            />
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `100px repeat(${confusionCategories.length}, 1fr)`,
+                    gap: '4px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div />
+                  {confusionCategories.map((c) => (
+                    <div key={`col-${c}`} className="eyebrow" style={{ padding: '0.4rem' }}>
+                      {c}
+                    </div>
+                  ))}
 
-              {confusionCategories.map((rowName, rIdx) => (
-                <React.Fragment key={`row-${rowName}`}>
-                  <div style={{ display: 'flex', alignItems: 'center', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    {rowName}
-                  </div>
-                  {confusionCategories.map((colName, cIdx) => {
-                    const val = confusionData[rIdx][cIdx];
-                    const isDiag = rIdx === cIdx;
-                    const isHighConfusion = !isDiag && val >= 0.15;
-
-                    return (
+                  {confusionCategories.map((rowName, rIdx) => (
+                    <React.Fragment key={`row-${rowName}`}>
                       <div
-                        key={`${rIdx}-${cIdx}`}
                         style={{
-                          height: '42px',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: 'var(--radius-xs)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.78rem',
+                          fontSize: '0.75rem',
                           fontWeight: 600,
-                          background: isDiag
-                            ? 'rgba(16, 185, 129, 0.18)'
-                            : isHighConfusion
-                            ? 'rgba(244, 63, 94, 0.22)'
-                            : 'var(--bg-subtle)',
-                          color: isDiag
-                            ? 'var(--status-good-text)'
-                            : isHighConfusion
-                            ? 'var(--status-risk-text)'
-                            : 'var(--text-muted)',
-                          border: `1px solid ${isHighConfusion ? 'rgba(244, 63, 94, 0.4)' : 'var(--border-subtle)'}`,
+                          color: 'var(--text-secondary)',
                         }}
-                        title={`${rowName} mislabeled as ${colName}: ${formatPercent(val)}`}
                       >
-                        {formatPercent(val)}
+                        {rowName}
                       </div>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
+                      {confusionCategories.map((colName, cIdx) => {
+                        const val = confusionData[rIdx]?.[cIdx] ?? 0;
+                        const isDiag = rIdx === cIdx;
+                        const isHighConfusion = !isDiag && val >= 0.15;
 
-          <div style={{ marginTop: '1rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            ⚠️ <strong>Neutral ↔ Positive</strong> has a 18.0% confusion rate, exceeding safe thresholds.
-          </div>
+                        return (
+                          <div
+                            key={`${rIdx}-${cIdx}`}
+                            style={{
+                              height: '42px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: 'var(--radius-xs)',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              background: isDiag
+                                ? 'rgba(16, 185, 129, 0.18)'
+                                : isHighConfusion
+                                ? 'rgba(244, 63, 94, 0.22)'
+                                : 'var(--bg-subtle)',
+                              color: isDiag
+                                ? 'var(--status-good-text)'
+                                : isHighConfusion
+                                ? 'var(--status-risk-text)'
+                                : 'var(--text-muted)',
+                              border: `1px solid ${
+                                isHighConfusion ? 'rgba(244, 63, 94, 0.4)' : 'var(--border-subtle)'
+                              }`,
+                            }}
+                            title={`${rowName} mislabeled as ${colName}: ${formatPercent(val)}`}
+                          >
+                            {formatPercent(val)}
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
+              {confusionInfo.top_confusion_pair && confusionInfo.top_confusion_rate > 0.05 ? (
+                <div style={{ marginTop: '1rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  ⚠️ <strong>{confusionInfo.top_confusion_pair[0]} ↔ {confusionInfo.top_confusion_pair[1]}</strong> has a{' '}
+                  {formatPercent(confusionInfo.top_confusion_rate)} pairwise confusion rate, exceeding safe thresholds.
+                </div>
+              ) : (
+                <div style={{ marginTop: '1rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  ✓ Inter-annotator label agreement is consistent across taxonomy categories.
+                </div>
+              )}
+            </>
+          )}
         </section>
 
         {/* Inline Horizontal Bar Chart Table with Integrated Labels */}
