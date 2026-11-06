@@ -12,6 +12,16 @@ AQG combines gold-standard validation and  inter-annotator agreement metrics, be
 - Redis integration for caching and background processing
 - Annotation, project, scoring, review, ingestion, export, and dashboard APIs
 - Quality scoring based on agreement, gold checks, trust signals, and anomalies
+- Real behavioral anomaly detection: annotation-velocity z-score, repetition streaks, label-distribution drift (TVD)
+- TF-IDF + cosine-distance embedding outlier detection with 2D PCA visualization
+- A/B testing framework with real experiment creation and variant promotion endpoints
+- Backend-computed confusion matrix for ambiguity insights and dynamic label guidance
+- Persistent automation rule toggles with backend enforcement
+- Real quality trend telemetry (trust score + Fleiss' Kappa over time) on the Dashboard
+- Global multi-project context with dynamic project switcher
+- Dataset upload modal with drag-and-drop, validation summary, and ingestion progress
+- 131 backend tests, 13 frontend unit tests (Vitest), 1 Playwright E2E test
+- GitHub Actions CI workflow covering migrations, backend tests, lint, unit tests, and E2E
 - Docker Compose setup for local full-stack development
 
 ## 📁 Project Structure
