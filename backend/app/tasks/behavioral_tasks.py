@@ -63,7 +63,7 @@ def process_batch_behavioral_task(
     """
     Process a batch of behavioral score inputs asynchronously.
     """
-    db = SessionLocal()
+    db = core_db.SessionLocal()
     processed = 0
     try:
         for rec in batch_records:

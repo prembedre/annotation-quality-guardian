@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session
 from app.services.gold_standard_service import compute_gold_accuracy
 from app.services.kappa_service import compute_fleiss_kappa
 from app.services.trust_score_service import compute_and_save_project_trust_scores
-from app.services.behavior_service import get_behavioral_scores_by_project
+from app.services.behavior_service import (
+    get_behavioral_scores_by_project,
+    compute_project_behavioral_scores,
+)
 from app.services.embedding_service import get_embedding_results_by_project
 
 
@@ -27,6 +30,12 @@ async def compute_project_scores(
     )
 
     kappa_result = compute_fleiss_kappa(
+        db=db,
+        project_id=project_id,
+    )
+
+    # Compute real behavioral anomaly metrics from annotator telemetry
+    compute_project_behavioral_scores(
         db=db,
         project_id=project_id,
     )
