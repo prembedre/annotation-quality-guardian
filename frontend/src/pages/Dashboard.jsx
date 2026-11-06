@@ -25,9 +25,8 @@ import {
   ErrorState,
   LoadingState,
   AnnotatorAvatar,
+  useProject,
 } from '../components';
-
-const PROJECT_ID = 1;
 
 function formatPercent(value) {
   if (value == null) return '—';
@@ -391,6 +390,7 @@ function AgreementHeatmap({ data }) {
 }
 
 export default function Dashboard() {
+  const { projectId } = useProject();
   const [timeRange, setTimeRange] = useState('7d');
   const [leaderboard, setLeaderboard] = useState([]);
   const [leaderboardTotal, setLeaderboardTotal] = useState(0);
@@ -410,10 +410,16 @@ export default function Dashboard() {
   const [selectedAnnotator, setSelectedAnnotator] = useState(null);
 
   const loadLeaderboard = useCallback(async () => {
+    if (!projectId) {
+      setLeaderboard([]);
+      setLeaderboardTotal(0);
+      setLoadingLeaderboard(false);
+      return;
+    }
     try {
       setLoadingLeaderboard(true);
       setLeaderboardError('');
-      const response = await api.get(`/dashboard/leaderboard?project_id=${PROJECT_ID}`);
+      const response = await api.get(`/dashboard/leaderboard?project_id=${projectId}`);
       setLeaderboard(response.data.leaderboard || []);
       setLeaderboardTotal(response.data.total_annotators || 0);
     } catch (error) {
@@ -422,13 +428,18 @@ export default function Dashboard() {
     } finally {
       setLoadingLeaderboard(false);
     }
-  }, []);
+  }, [projectId]);
 
   const loadHeatmap = useCallback(async () => {
+    if (!projectId) {
+      setHeatmap(null);
+      setLoadingHeatmap(false);
+      return;
+    }
     try {
       setLoadingHeatmap(true);
       setHeatmapError('');
-      const response = await api.get(`/dashboard/agreement-heatmap?project_id=${PROJECT_ID}`);
+      const response = await api.get(`/dashboard/agreement-heatmap?project_id=${projectId}`);
       setHeatmap(response.data);
     } catch (error) {
       console.error('Failed to load agreement heatmap:', error);
@@ -436,7 +447,7 @@ export default function Dashboard() {
     } finally {
       setLoadingHeatmap(false);
     }
-  }, []);
+  }, [projectId]);
 
   const loadData = useCallback(() => {
     loadLeaderboard();
@@ -481,6 +492,22 @@ export default function Dashboard() {
     if (rank === 3) return { delta: '↓1', color: 'var(--status-risk-text)' };
     return { delta: '=', color: 'var(--text-muted)' };
   };
+
+  if (!projectId) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Real-Time Telemetry & Benchmarks"
+          title="Quality Dashboard"
+          subtitle="Continuous annotator reliability monitoring, consensus agreement matrix, and anomaly detection."
+        />
+        <EmptyState
+          title="No Project Selected"
+          description="Please select or create a project from the sidebar to inspect consensus and annotator metrics."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -626,7 +653,7 @@ export default function Dashboard() {
           delta="+2 this week"
           sparkline={[8, 9, 11, 10, 12, 14, leaderboardTotal || 12]}
           icon={Users}
-          subtext={`Project #${PROJECT_ID} active roster`}
+          subtext={`Project #${projectId} active roster`}
           loading={loadingLeaderboard}
         />
 

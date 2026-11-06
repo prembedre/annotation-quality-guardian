@@ -19,9 +19,8 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  useProject,
 } from '../components';
-
-const PROJECT_ID = 1;
 
 function formatPercent(value) {
   if (value === null || value === undefined) return '—';
@@ -29,6 +28,7 @@ function formatPercent(value) {
 }
 
 export default function AmbiguityInsights() {
+  const { projectId } = useProject();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,12 +37,17 @@ export default function AmbiguityInsights() {
   const [recommendationsOpen, setRecommendationsOpen] = useState(false);
 
   const loadInsights = useCallback(async () => {
+    if (!projectId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
 
     try {
       const response = await api.get('/ambiguity/classes', {
-        params: { project_id: PROJECT_ID },
+        params: { project_id: projectId },
       });
       setData(response.data);
     } catch (err) {
@@ -51,7 +56,7 @@ export default function AmbiguityInsights() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     loadInsights();
@@ -92,6 +97,22 @@ export default function AmbiguityInsights() {
     [0.18, 0.74, 0.08], // Notice Neutral vs Positive has high confusion 18%!
     [0.03, 0.11, 0.86],
   ];
+
+  if (!projectId) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Taxonomy & Edge Case Analysis"
+          title="Ambiguous Classes"
+          subtitle="Detect classes with systematic annotator confusion and evaluate disagreement entropy."
+        />
+        <EmptyState
+          title="No Project Selected"
+          description="Please select or create a project from the sidebar to inspect class ambiguity."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

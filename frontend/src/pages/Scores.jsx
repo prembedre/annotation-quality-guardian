@@ -21,11 +21,11 @@ import {
   ErrorState,
   LoadingState,
   useToast,
+  useProject,
 } from '../components';
 
-const PROJECT_ID = 1;
-
 export default function Scores() {
+  const { projectId } = useProject();
   const [scores, setScores] = useState([]);
   const [scoreSummary, setScoreSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,9 +35,14 @@ export default function Scores() {
   const { success, error: toastError } = useToast();
 
   const loadScores = useCallback(() => {
+    if (!projectId) {
+      setScores([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
-    fetchScores({ project_id: PROJECT_ID })
+    fetchScores({ project_id: projectId })
       .then((data) => {
         const list = data?.scores || (Array.isArray(data) ? data : []);
         setScores(list);
@@ -50,17 +55,21 @@ export default function Scores() {
         setError(err.response?.data?.detail || 'Failed to fetch quality scores.');
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [projectId]);
 
   // Load aggregate summary metrics (kappa, gold accuracy, avg trust score)
   const loadSummary = useCallback(async () => {
+    if (!projectId) {
+      setScoreSummary(null);
+      return;
+    }
     try {
-      const { data } = await api.get('/scores/summary', { params: { project_id: PROJECT_ID } });
+      const { data } = await api.get('/scores/summary', { params: { project_id: projectId } });
       setScoreSummary(data);
     } catch (_) {
       // Summary is supplementary — don't block page on error
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     loadScores();
@@ -68,17 +77,18 @@ export default function Scores() {
   }, [loadScores, loadSummary]);
 
   const handleCompute = async () => {
+    if (!projectId) return;
     try {
       setComputing(true);
       setError('');
-      const result = await computeScores(PROJECT_ID);
+      const result = await computeScores(projectId);
       // Backend now returns { status, message, result } — use the specific message
       const msg = result?.message || `Scored ${result?.result?.trust_score_summary?.total_items_processed ?? 0} items successfully.`;
       success(msg);
       setLastComputed(new Date().toLocaleTimeString());
       // Fetch fresh score summary for the metric cards
       try {
-        const summaryResp = await api.get('/scores/summary', { params: { project_id: PROJECT_ID } });
+        const summaryResp = await api.get('/scores/summary', { params: { project_id: projectId } });
         setScoreSummary(summaryResp.data);
       } catch (_) {
         // Fallback: summary is non-critical for main scores display
@@ -103,16 +113,16 @@ export default function Scores() {
 
 
   const apiSnippets = {
-    curl: `curl -X POST "http://localhost:8000/api/scores/compute?project_id=${PROJECT_ID}" \\
+    curl: `curl -X POST "http://localhost:8000/api/scores/compute?project_id=${projectId || 1}" \\
   -H "Accept: application/json"`,
     python: `import requests
 
 response = requests.post(
     "http://localhost:8000/api/scores/compute",
-    params={"project_id": ${PROJECT_ID}}
+    params={"project_id": ${projectId || 1}}
 )
 print("Quality Scores:", response.json())`,
-    js: `const response = await fetch("http://localhost:8000/api/scores/compute?project_id=${PROJECT_ID}", {
+    js: `const response = await fetch("http://localhost:8000/api/scores/compute?project_id=${projectId || 1}", {
   method: "POST",
   headers: { "Accept": "application/json" }
 });
@@ -168,6 +178,22 @@ console.log("Quality Scores:", scores);`,
     },
   ];
 
+  if (!projectId) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Consensus & Reliability Engine"
+          title="Quality Scores"
+          subtitle="Benchmark metrics evaluating ground-truth accuracy, inter-rater reliability, and behavioral signals."
+        />
+        <EmptyState
+          title="No Project Selected"
+          description="Please select or create a project from the sidebar to inspect consensus and quality scores."
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Standard Page Header */}
@@ -217,7 +243,7 @@ console.log("Quality Scores:", scores);`,
           <EmptyState
             eyebrow="Quality Engine Telemetry"
             title="No Quality Scores Computed Yet"
-            description={`Evaluation metrics have not been generated for Project #${PROJECT_ID}. Trigger a computation run to calculate inter-annotator agreement (Cohen's Kappa), gold standard precision, and latent space outliers.`}
+            description={`Evaluation metrics have not been generated for Project #${projectId}. Trigger a computation run to calculate inter-annotator agreement (Cohen's Kappa), gold standard precision, and latent space outliers.`}
           >
             <button
               type="button"
@@ -245,7 +271,7 @@ console.log("Quality Scores:", scores);`,
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
             {benchmarkMetrics.map((metric, idx) => {
               const Icon = metric.icon;
-              return (
+                          return (
                 <div key={idx} className="card" style={{ marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

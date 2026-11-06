@@ -17,9 +17,9 @@ import {
   ErrorState,
   LoadingState,
   useToast,
+  EmptyState,
+  useProject,
 } from '../components';
-
-const PROJECT_ID = 1;
 
 const DEFAULT_SETTINGS = {
   gold_threshold: 90,
@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS = {
 };
 
 export default function ProjectSettings() {
+  const { projectId } = useProject();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [savedSettings, setSavedSettings] = useState(DEFAULT_SETTINGS);
 
@@ -38,11 +39,15 @@ export default function ProjectSettings() {
   const { success, error: toastError } = useToast();
 
   const loadSettings = useCallback(async () => {
+    if (!projectId) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError('');
 
-      const response = await api.get(`/projects/${PROJECT_ID}/settings`);
+      const response = await api.get(`/projects/${projectId}/settings`);
       const loadedSettings = {
         gold_threshold:
           response.data.gold_threshold != null
@@ -70,7 +75,7 @@ export default function ProjectSettings() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     loadSettings();
@@ -92,6 +97,7 @@ export default function ProjectSettings() {
 
   const handleSave = async (e) => {
     e?.preventDefault();
+    if (!projectId) return;
     try {
       setSaving(true);
       setError('');
@@ -103,7 +109,7 @@ export default function ProjectSettings() {
         embedding_threshold: Number(settings.embedding_threshold),
       };
 
-      const response = await api.put(`/projects/${PROJECT_ID}/settings`, payload);
+      const response = await api.put(`/projects/${projectId}/settings`, payload);
 
       const updated = {
         gold_threshold: Math.round(Number(response.data.gold_threshold)),
@@ -124,6 +130,22 @@ export default function ProjectSettings() {
       setSaving(false);
     }
   };
+
+  if (!projectId) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Tuning & System Calibration"
+          title="Project Quality Settings"
+          subtitle="Define acceptance bounds, baseline precision bars, and outlier sensitivity thresholds."
+        />
+        <EmptyState
+          title="No Project Selected"
+          description="Please select or create a project from the sidebar to configure quality thresholds."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

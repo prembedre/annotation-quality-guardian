@@ -6,6 +6,7 @@ import { Pagination } from '../components/Pagination';
 import { DatasetExport } from '../components/DatasetExport';
 import { ErrorState, EmptyState, LoadingState } from '../components/States';
 import { useToast } from '../components/ToastContext';
+import { useProject } from '../components/ProjectContext';
 import {
   getReviewQueue,
   exportReviewQueue,
@@ -14,6 +15,7 @@ import {
 import { CheckSquare, RefreshCw } from 'lucide-react';
 
 export default function ReviewQueue() {
+  const { projectId: currentProjectId } = useProject();
   const [queueData, setQueueData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -27,7 +29,6 @@ export default function ReviewQueue() {
   const [density, setDensity] = useState('comfortable');
 
   const { success, error: toastError } = useToast();
-  const currentProjectId = 1;
 
   const fetchQueue = useCallback(
     async (
@@ -37,6 +38,13 @@ export default function ReviewQueue() {
       currentSearch = search,
       currentRisk = riskFilter
     ) => {
+      if (!currentProjectId) {
+        setQueueData([]);
+        setTotal(0);
+        setTotalPages(1);
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         setError('');
@@ -149,6 +157,22 @@ export default function ReviewQueue() {
     },
     [fetchQueue, page, pageSize, statusFilter, search, riskFilter, success, toastError]
   );
+
+  if (!currentProjectId) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Data-Grid Observability"
+          title="Review Queue"
+          subtitle="Active flagged annotations, dispute triage, and auditor escalation actions."
+        />
+        <EmptyState
+          title="No Project Selected"
+          description="Please select or create a project from the sidebar to inspect items in the review queue."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

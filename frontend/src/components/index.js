@@ -26,3 +26,4 @@ export { default as AnnotatorAvatar, getAvatarPalette, getInitials } from './Ann
 export { AuthProvider, useAuth } from './AuthContext';
 export { ProtectedRoute } from './ProtectedRoute';
 export { DatasetUploadModal } from './DatasetUploadModal';
+export { ProjectProvider, useProject } from './ProjectContext';

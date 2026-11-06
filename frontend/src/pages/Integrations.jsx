@@ -34,6 +34,7 @@ import {
   ErrorState,
   LoadingState,
   useToast,
+  useProject,
 } from '../components';
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -290,6 +291,7 @@ function ConnectorForm({ form, errors, onChange, onDbTypeChange, submitError }) 
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function Integrations() {
+  const { projectId } = useProject();
   const [connectors, setConnectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -613,13 +615,13 @@ export default function Integrations() {
     try {
       setSyncingId(activeSyncConnector.id);
       const payload = {
-        project_id: 1,
+        project_id: projectId || 1,
         table_name: syncTable.trim() || undefined,
         limit: Number(syncLimit) || 1000,
       };
       const res = await syncConnector(activeSyncConnector.id, payload);
       const inserted = res.synced_rows ?? res.inserted_records ?? 0;
-      success(`Synced ${inserted} annotations into Project #1!`);
+      success(`Synced ${inserted} annotations into Project #${projectId || 1}!`);
       setActiveSyncConnector(null);
       setSyncTable('');
       await loadConnectors();

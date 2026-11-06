@@ -56,6 +56,8 @@ import {
   AuthProvider,
   useAuth,
   ProtectedRoute,
+  ProjectProvider,
+  useProject,
 } from './components';
 
 // ── Role constants (mirror backend UserRole enum values) ──────────────────────
@@ -142,12 +144,6 @@ const NAV_GROUPS = [
   },
 ];
 
-const PROJECTS_LIST = [
-  { id: 1, name: 'Project 1 (Sentiment NLP)', env: 'Production', active: true },
-  { id: 2, name: 'Project 2 (NER Clinical)', env: 'Staging', active: false },
-  { id: 3, name: 'Project 3 (Vision Bounding)', env: 'Development', active: false },
-];
-
 function getBreadcrumb(pathname) {
   for (const group of NAV_GROUPS) {
     for (const item of group.items) {
@@ -180,11 +176,13 @@ function NavigationShell({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState('');
-  const [activeProject, setActiveProject] = useState(PROJECTS_LIST[0]);
+  const { projectId, project: activeProjectObj, projects, setProjectId, loadingProjects } = useProject();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [healthModalOpen, setHealthModalOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  const activeProject = activeProjectObj || (projectId ? { id: projectId, name: `Project ${projectId}`, env: 'Default' } : { id: '-', name: 'No Project Selected', env: 'None' });
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -207,9 +205,9 @@ function NavigationShell({ children }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const filteredProjects = PROJECTS_LIST.filter((p) =>
-    p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
-    p.env.toLowerCase().includes(projectSearch.toLowerCase())
+  const filteredProjects = projects.filter((p) =>
+    (p.name || '').toLowerCase().includes(projectSearch.toLowerCase()) ||
+    (p.description || '').toLowerCase().includes(projectSearch.toLowerCase())
   );
 
   // Filter nav items by current user's role
@@ -309,28 +307,34 @@ function NavigationShell({ children }) {
                   autoFocus
                 />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {filteredProjects.map((proj) => (
-                    <button
-                      key={proj.id}
-                      type="button"
-                      className={`project-menu-item ${proj.id === activeProject.id ? 'active' : ''}`}
-                      onClick={() => {
-                        setActiveProject(proj);
-                        setProjectDropdownOpen(false);
-                        info(`Switched active context to ${proj.name}`);
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>{proj.name}</span>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                          ({proj.env})
-                        </span>
-                      </div>
-                      {proj.id === activeProject.id && (
-                        <Check size={13} style={{ color: 'var(--accent-brand)' }} />
-                      )}
-                    </button>
-                  ))}
+                  {filteredProjects.length === 0 ? (
+                    <div style={{ padding: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      {loadingProjects ? 'Loading projects...' : 'No projects found'}
+                    </div>
+                  ) : (
+                    filteredProjects.map((proj) => (
+                      <button
+                        key={proj.id}
+                        type="button"
+                        className={`project-menu-item ${proj.id === activeProject.id ? 'active' : ''}`}
+                        onClick={() => {
+                          setProjectId(proj.id);
+                          setProjectDropdownOpen(false);
+                          info(`Switched active context to ${proj.name}`);
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{proj.name}</span>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                            (ID: {proj.id})
+                          </span>
+                        </div>
+                        {proj.id === activeProject.id && (
+                          <Check size={13} style={{ color: 'var(--accent-brand)' }} />
+                        )}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -565,7 +569,7 @@ function NavigationShell({ children }) {
             {/* Active Project Environment Status Chip */}
             <div className="topbar-status-chip">
               <div className="pulsing-dot" style={{ width: '6px', height: '6px' }} />
-              <span className="font-mono">{activeProject.name} • {activeProject.env}</span>
+              <span className="font-mono">{activeProject.name}{activeProject.env ? ` • ${activeProject.env}` : ''}</span>
             </div>
           </div>
         </header>
@@ -682,7 +686,9 @@ function App() {
       <ToastProvider>
         <Router>
           <AuthProvider>
-            <AppRoutes />
+            <ProjectProvider>
+              <AppRoutes />
+            </ProjectProvider>
           </AuthProvider>
         </Router>
       </ToastProvider>

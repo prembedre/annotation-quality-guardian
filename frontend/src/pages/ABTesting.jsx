@@ -18,6 +18,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  useProject,
 } from '../components';
 
 function formatPercent(value) {
@@ -48,16 +49,22 @@ function SplitPathGraphic() {
 }
 
 export default function ABTesting() {
+  const { projectId } = useProject();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const loadData = useCallback(async () => {
+    if (!projectId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError('');
       const response = await api.get('/ab-testing/experiments', {
-        params: { project_id: 1 },
+        params: { project_id: projectId },
       });
       const experiments = response.data?.experiments || [];
       if (experiments.length > 0) {
@@ -72,12 +79,11 @@ export default function ABTesting() {
       }
     } catch (err) {
       console.error('Failed to load active A/B test:', err);
-      // Fallback to sample view if uninitialized
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     loadData();
@@ -113,6 +119,22 @@ export default function ABTesting() {
     Math.round((experiment.current_samples / experiment.target_samples) * 100),
     100
   );
+
+  if (!projectId) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Guideline Optimization & Experimentation"
+          title="A/B Guidelines Testing"
+          subtitle="Evaluate annotation accuracy improvements when revising labeling instructions and definitions."
+        />
+        <EmptyState
+          title="No Project Selected"
+          description="Please select or create a project from the sidebar to inspect A/B guideline tests."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
