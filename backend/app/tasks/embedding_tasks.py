@@ -57,41 +57,26 @@ def compute_embedding_outlier_task(
 def process_project_embeddings_task(
     self,
     project_id: int,
-    model_name: str = "text-embedding-3-small",
-    outlier_threshold: float = 0.75,
+    model_name: str = "tfidf-centroid-pca",
+    outlier_threshold: float = 0.70,
 ) -> Dict[str, Any]:
     """
-    Run embedding analysis across all items of a project asynchronously.
+    Run embedding analysis across all items of a project asynchronously using real TF-IDF & PCA.
     """
     db = core_db.SessionLocal()
-    processed = 0
-    outliers_found = 0
     try:
-        items = db.query(Item).filter(Item.project_id == project_id).all()
-        for idx, item in enumerate(items):
-            # Simulated outlier score integration calculation
-            outlier_score = 0.15 if not item.content.get("anomaly") else 0.85
-            is_outlier = outlier_score >= outlier_threshold
-
-            record_embedding_result(
-                db=db,
-                project_id=project_id,
-                item_id=item.id,
-                model_name=model_name,
-                outlier_score=outlier_score,
-                is_outlier=is_outlier,
-                embedding=[0.05 * (idx % 10), 0.1 * (idx % 5)],
-                details={"model": model_name, "threshold": outlier_threshold},
-            )
-            processed += 1
-            if is_outlier:
-                outliers_found += 1
-
+        from app.services.embedding_service import compute_project_embedding_outliers
+        result = compute_project_embedding_outliers(
+            db=db,
+            project_id=project_id,
+            model_name=model_name,
+            outlier_threshold=outlier_threshold,
+        )
         return {
             "status": "COMPLETED",
             "project_id": project_id,
-            "items_processed": processed,
-            "outliers_detected": outliers_found,
+            "items_processed": result["items_processed"],
+            "outliers_detected": result["outliers_detected"],
         }
     except Exception as exc:
         db.rollback()

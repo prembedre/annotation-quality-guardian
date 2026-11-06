@@ -13,7 +13,10 @@ from app.services.behavior_service import (
     get_behavioral_scores_by_project,
     compute_project_behavioral_scores,
 )
-from app.services.embedding_service import get_embedding_results_by_project
+from app.services.embedding_service import (
+    get_embedding_results_by_project,
+    compute_project_embedding_outliers,
+)
 
 
 async def compute_project_scores(
@@ -36,6 +39,12 @@ async def compute_project_scores(
 
     # Compute real behavioral anomaly metrics from annotator telemetry
     compute_project_behavioral_scores(
+        db=db,
+        project_id=project_id,
+    )
+
+    # Compute real embedding outlier scores and 2D projections
+    compute_project_embedding_outliers(
         db=db,
         project_id=project_id,
     )

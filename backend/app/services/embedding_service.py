@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.models.embedding_result import EmbeddingResult
 from app.models.item import Item
 from app.models.project import Project
+from app.models.annotation import Annotation
+from scoring.embeddings.outlier_detector import compute_tfidf_outlier_scores
 
 
 def record_embedding_result(
@@ -110,3 +112,65 @@ def get_embedding_result_for_item(
         .order_by(EmbeddingResult.computed_at.desc())
         .first()
     )
+
+
+def compute_project_embedding_outliers(
+    db: Session,
+    project_id: int,
+    model_name: str = "tfidf-centroid-pca",
+    outlier_threshold: float = 0.70,
+) -> Dict[str, Any]:
+    """
+    Compute real TF-IDF centroid distance outlier scores and 2D PCA projection
+    for all items in a project.
+    """
+    items = db.query(Item).filter(Item.project_id == project_id).all()
+    if not items:
+        return {
+            "project_id": project_id,
+            "items_processed": 0,
+            "outliers_detected": 0,
+        }
+
+    annotations = db.query(Annotation).filter(Annotation.project_id == project_id).all()
+    item_labels: Dict[int, str] = {}
+    for a in annotations:
+        if a.label and a.item_id not in item_labels:
+            item_labels[a.item_id] = a.label
+
+    items_data = []
+    for it in items:
+        lbl = it.gold_label if getattr(it, "gold_label", None) else item_labels.get(it.id)
+        items_data.append({
+            "item_id": it.id,
+            "content": it.content,
+            "label": lbl,
+        })
+
+    computed_results = compute_tfidf_outlier_scores(
+        items_data=items_data,
+        outlier_threshold=outlier_threshold,
+    )
+
+    outliers_detected = 0
+    for res in computed_results:
+        record_embedding_result(
+            db=db,
+            project_id=project_id,
+            item_id=res["item_id"],
+            model_name=model_name,
+            outlier_score=res["outlier_score"],
+            is_outlier=res["is_outlier"],
+            embedding=res["embedding"],
+            nearest_item_id=res["nearest_item_id"],
+            details=res["details"],
+        )
+        if res["is_outlier"]:
+            outliers_detected += 1
+
+    return {
+        "project_id": project_id,
+        "items_processed": len(items),
+        "outliers_detected": outliers_detected,
+    }
+

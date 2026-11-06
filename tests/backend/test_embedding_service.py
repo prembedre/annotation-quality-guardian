@@ -7,7 +7,9 @@ from app.services.embedding_service import (
     record_embedding_result,
     get_embedding_results_by_project,
     get_embedding_result_for_item,
+    compute_project_embedding_outliers,
 )
+from scoring.embeddings import compute_tfidf_outlier_scores
 
 
 def test_record_and_query_embedding_result(db_session):
@@ -56,3 +58,62 @@ def test_record_and_query_embedding_result(db_session):
     outliers = get_embedding_results_by_project(db=db_session, project_id=220, outliers_only=True)
     assert len(outliers) == 1
     assert outliers[0].item_id == 702
+
+
+def test_compute_tfidf_outlier_scores():
+    items = [
+        {"item_id": 1, "content": {"text": "customer service was great and helpful"}, "label": "positive"},
+        {"item_id": 2, "content": {"text": "wonderful service and great experience"}, "label": "positive"},
+        {"item_id": 3, "content": {"text": "excellent customer support and friendly staff"}, "label": "positive"},
+        # Outlier item in a customer service context
+        {"item_id": 4, "content": {"text": "astrophysics black hole gravitational quantum singularity"}, "label": "positive"},
+    ]
+
+    results = compute_tfidf_outlier_scores(items, outlier_threshold=0.60)
+    assert len(results) == 4
+
+    outlier_item = next(r for r in results if r["item_id"] == 4)
+    inlier_item = next(r for r in results if r["item_id"] == 1)
+
+    # Outlier should have higher outlier score than inliers
+    assert outlier_item["outlier_score"] > inlier_item["outlier_score"]
+    assert outlier_item["is_outlier"] is True
+
+    # 2D projection coordinates exist and have 2 dimensions
+    for r in results:
+        assert len(r["embedding"]) == 2
+        assert isinstance(r["embedding"][0], float)
+        assert isinstance(r["embedding"][1], float)
+
+
+def test_compute_project_embedding_outliers_database(db_session):
+    proj = Project(name="Project Real Embeddings Test", label_set=["pos", "neg"])
+    db_session.add(proj)
+    db_session.commit()
+
+    # Normal items
+    items = [
+        Item(project_id=proj.id, external_id="emb_1", content={"text": "happy with good product"}, gold_label="pos"),
+        Item(project_id=proj.id, external_id="emb_2", content={"text": "great quality good product"}, gold_label="pos"),
+        Item(project_id=proj.id, external_id="emb_3", content={"text": "very good product and quality"}, gold_label="pos"),
+        # Outlier item
+        Item(project_id=proj.id, external_id="emb_4", content={"text": "unrelated alien spacecraft warp drive"}, gold_label="pos"),
+    ]
+    db_session.add_all(items)
+    db_session.commit()
+
+    summary = compute_project_embedding_outliers(
+        db=db_session,
+        project_id=proj.id,
+        outlier_threshold=0.60,
+    )
+    assert summary["items_processed"] == 4
+    assert summary["outliers_detected"] >= 1
+
+    stored_outliers = get_embedding_results_by_project(db_session, proj.id, outliers_only=True)
+    assert len(stored_outliers) >= 1
+    outlier_res = stored_outliers[0]
+    assert outlier_res.is_outlier is True
+    assert len(outlier_res.embedding) == 2
+    assert outlier_res.nearest_item_id is not None
+
