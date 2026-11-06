@@ -16,6 +16,7 @@ from app.models.reviewer_decision import ReviewerDecision
 from app.models.external_db_connector import ExternalDBConnector
 from app.models.reroute_history import RerouteHistory
 from app.models.ab_test_experiment import ABTestExperiment
+from app.models.automation_rule import AutomationRule
 from app.models.user import User, UserRole
 
 
@@ -33,6 +34,7 @@ __all__ = [
     "ExternalDBConnector",
     "RerouteHistory",
     "ABTestExperiment",
+    "AutomationRule",
     "User",
     "UserRole",
 ]

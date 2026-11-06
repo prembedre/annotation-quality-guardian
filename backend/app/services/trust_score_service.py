@@ -77,6 +77,7 @@ def calculate_trust_score(
     flag_threshold: float = DEFAULT_FLAG_THRESHOLD,
     anomaly_flag: bool = False,
     is_outlier: bool = False,
+    outlier_quarantine_enabled: bool = False,
 ) -> Tuple[float, Dict[str, Any], bool, Optional[str]]:
     """
     Combine available signals into a final Trust Score.
@@ -131,7 +132,10 @@ def calculate_trust_score(
     if anomaly_flag:
         flag_reasons.append("Behavioral anomaly detected in annotator activity")
     if is_outlier:
-        flag_reasons.append("Embedding outlier detected in dataset distribution")
+        if outlier_quarantine_enabled:
+            flag_reasons.append("Latent space outlier quarantined directly to expert review queue")
+        else:
+            flag_reasons.append("Embedding outlier detected in dataset distribution")
     if norm_gold is not None and norm_gold < 0.5:
         flag_reasons.append("Gold standard verification mismatch")
 
@@ -222,6 +226,10 @@ def compute_and_save_item_trust_score(
         is_outlier = embedding_rec.is_outlier
 
     # Calculate unified score
+    from app.services.automation_service import get_automation_rules_map
+    rules_map = get_automation_rules_map(db=db, project_id=project_id)
+    outlier_quarantine = rules_map.get("rule-3", False)
+
     final_score, breakdown, flagged, flag_reason = calculate_trust_score(
         gold_score=gold_score,
         agreement_score=agreement_score,
@@ -230,6 +238,7 @@ def compute_and_save_item_trust_score(
         weights=weights,
         anomaly_flag=anomaly_flag,
         is_outlier=is_outlier,
+        outlier_quarantine_enabled=outlier_quarantine,
     )
 
     # Check for existing TrustScore record

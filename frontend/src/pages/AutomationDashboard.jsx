@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   assignReroute,
   fetchPendingReroutes,
+  fetchAutomationRules,
+  updateAutomationRule,
 } from '../services/reroutingService';
 import {
   Bot,
@@ -27,6 +29,7 @@ import {
   ErrorState,
   LoadingState,
   useToast,
+  useProject,
 } from '../components';
 
 function extractTextContent(content) {
@@ -39,6 +42,7 @@ function extractTextContent(content) {
 }
 
 export default function AutomationDashboard() {
+  const { projectId } = useProject();
   const [reroutes, setReroutes] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,11 +84,29 @@ export default function AutomationDashboard() {
 
   const { success, error: toastError } = useToast();
 
+  const loadRules = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const data = await fetchAutomationRules(projectId);
+      if (Array.isArray(data) && data.length > 0) {
+        setRules(data);
+      }
+    } catch (err) {
+      console.error('Failed to load automation rules:', err);
+    }
+  }, [projectId]);
+
   const loadReroutes = useCallback(async () => {
+    if (!projectId) {
+      setReroutes([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError('');
-      const data = await fetchPendingReroutes();
+      const data = await fetchPendingReroutes(projectId);
       setReroutes(data.items || []);
       setTotal(data.total || 0);
     } catch (err) {
@@ -93,11 +115,12 @@ export default function AutomationDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     loadReroutes();
-  }, [loadReroutes]);
+    loadRules();
+  }, [loadReroutes, loadRules]);
 
   function openAssignModal(item, e) {
     e?.stopPropagation();
@@ -140,12 +163,44 @@ export default function AutomationDashboard() {
     }
   }
 
-  const toggleRule = (id) => {
+  const toggleRule = async (id) => {
+    const rule = rules.find((r) => r.id === id);
+    if (!rule) return;
+    const newActive = !rule.active;
+
+    // Optimistic UI update
     setRules((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, active: !r.active } : r))
+      prev.map((r) => (r.id === id ? { ...r, active: newActive } : r))
     );
-    success('Automation policy status updated.');
+
+    try {
+      await updateAutomationRule(id, newActive, projectId);
+      success(`Automation policy "${rule.title}" updated.`);
+    } catch (err) {
+      console.error('Failed to update automation rule:', err);
+      // Revert optimistic state
+      setRules((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, active: rule.active } : r))
+      );
+      toastError(err.response?.data?.detail || 'Failed to update automation rule.');
+    }
   };
+
+  if (!projectId) {
+    return (
+      <div>
+        <PageHeader
+          eyebrow="Phase 4 Automation Engine"
+          title="Automated Task Rerouting & Rules"
+          subtitle="Define intelligent policies to triage, quarantine, and reassign low-confidence tasks."
+        />
+        <EmptyState
+          title="No Project Selected"
+          description="Please select or create a project from the sidebar to inspect automation workflows."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -4,6 +4,7 @@ API routes for Automated Task Rerouting and Annotator Reassignment.
 
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_role
@@ -13,6 +14,10 @@ from app.schemas.rerouting import (
     ReroutePendingListResponse,
     RerouteAssignRequest,
     RerouteAssignResponse,
+)
+from app.services.automation_service import (
+    get_project_automation_rules,
+    update_automation_rule,
 )
 from app.services.rerouting_service import (
     get_pending_reroutes,
@@ -28,6 +33,53 @@ automation_router = APIRouter(
     prefix="/automation",
     tags=["Automation Dashboard"],
 )
+
+
+class AutomationRuleUpdateRequest(BaseModel):
+    active: bool = Field(..., description="Whether this automation policy rule is active")
+
+
+@automation_router.get(
+    "/rules",
+    summary="Get persistent automation rules for project",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
+async def list_automation_rules(
+    project_id: int = Query(1, ge=1, description="Project ID"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve project automation policy rules, initializing defaults if needed.
+    """
+    return get_project_automation_rules(db=db, project_id=project_id)
+
+
+@automation_router.put(
+    "/rules/{rule_id}",
+    summary="Update active status of an automation rule",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
+async def set_automation_rule(
+    rule_id: str,
+    payload: AutomationRuleUpdateRequest,
+    project_id: int = Query(1, ge=1, description="Project ID"),
+    db: Session = Depends(get_db),
+):
+    """
+    Persist changes to an automation rule toggle.
+    """
+    try:
+        return update_automation_rule(
+            db=db,
+            project_id=project_id,
+            rule_id=rule_id,
+            active=payload.active,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        )
 
 
 @router.get(

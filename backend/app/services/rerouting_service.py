@@ -149,11 +149,16 @@ def get_pending_reroutes(
 
     # ---------------------------------------------------------------
     # 2. Check flagged TrustScores that do not have a resolved
-    # reroute record (only if automation_enabled is True).
+    # reroute record (only if automation_enabled and Rule 1 are True).
     # ---------------------------------------------------------------
 
+    from app.services.automation_service import get_automation_rules_map
+
+    rules_map = get_automation_rules_map(db=db, project_id=settings_project_id)
+    rule_1_active = rules_map.get("rule-1", True)
+
     flagged_ts_list = []
-    if automation_enabled:
+    if automation_enabled and rule_1_active:
         flagged_ts_query = db.query(TrustScore).filter(
             TrustScore.flagged == True
         )

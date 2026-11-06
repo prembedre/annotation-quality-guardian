@@ -1,7 +1,8 @@
 import api from './api';
 
-export async function fetchPendingReroutes() {
-  const { data } = await api.get('/rerouting/pending');
+export async function fetchPendingReroutes(projectId) {
+  const params = projectId ? { project_id: projectId } : {};
+  const { data } = await api.get('/rerouting/pending', { params });
   return data;
 }
 
@@ -19,5 +20,17 @@ export async function assignReroute(
   }
 
   const { data } = await api.post(`/rerouting/${itemId}/assign`, payload);
+  return data;
+}
+
+export async function fetchAutomationRules(projectId) {
+  const params = projectId ? { project_id: projectId } : {};
+  const { data } = await api.get('/automation/rules', { params });
+  return data;
+}
+
+export async function updateAutomationRule(ruleId, active, projectId) {
+  const params = projectId ? { project_id: projectId } : {};
+  const { data } = await api.put(`/automation/rules/${ruleId}`, { active }, { params });
   return data;
 }
