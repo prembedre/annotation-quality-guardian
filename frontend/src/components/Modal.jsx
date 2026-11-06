@@ -29,7 +29,7 @@ export function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose} aria-hidden="true">
+    <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-dialog"
         style={{ maxWidth }}

@@ -265,8 +265,10 @@ export default function ReviewQueue() {
               </span>
 
               <Pagination
-                page={page}
+                currentPage={page}
                 totalPages={totalPages}
+                totalRecords={total}
+                pageSize={pageSize}
                 onPageChange={handlePageChange}
                 disabled={loading}
               />
