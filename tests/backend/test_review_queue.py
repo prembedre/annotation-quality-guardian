@@ -45,6 +45,7 @@ def create_trust_score(
 def test_review_queue_pagination_and_filtering(
     client,
     db_session,
+    admin_headers,
 ):
     """Test review queue filtering and pagination."""
 
@@ -110,7 +111,8 @@ def test_review_queue_pagination_and_filtering(
         "?project_id=10"
         "&flagged=true"
         "&page=1"
-        "&page_size=10"
+        "&page_size=10",
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -131,7 +133,8 @@ def test_review_queue_pagination_and_filtering(
         "?project_id=10"
         "&flagged=true"
         "&page=1"
-        "&page_size=2"
+        "&page_size=2",
+        headers=admin_headers,
     )
 
     assert response_paged.status_code == 200
@@ -149,7 +152,8 @@ def test_review_queue_pagination_and_filtering(
     response_score = client.get(
         "/api/review/queue"
         "?project_id=10"
-        "&max_score=0.5"
+        "&max_score=0.5",
+        headers=admin_headers,
     )
 
     assert response_score.status_code == 200
@@ -159,7 +163,7 @@ def test_review_queue_pagination_and_filtering(
     assert score_data["total"] == 3
 
 
-def test_resolve_review_item(client, db_session):
+def test_resolve_review_item(client, db_session, admin_headers):
     """Test resolving a flagged review item."""
 
     project = Project(
@@ -199,6 +203,7 @@ def test_resolve_review_item(client, db_session):
             "ground_truth_label": "pos",
             "notes": "Audited by Senior Reviewer",
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -231,7 +236,7 @@ def test_resolve_review_item(client, db_session):
     )
 
 
-def test_resolve_nonexistent_item(client):
+def test_resolve_nonexistent_item(client, admin_headers):
     """Test resolving an item that does not exist."""
 
     response = client.post(
@@ -239,6 +244,19 @@ def test_resolve_nonexistent_item(client):
         json={
             "ground_truth_label": "positive",
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 404
+
+
+def test_review_queue_unauthenticated_returns_401(client):
+    """Unauthenticated review queue access returns 401."""
+    response = client.get("/api/review/queue?project_id=1")
+    assert response.status_code == 401
+
+
+def test_review_queue_insufficient_role_returns_403(client, annotator_headers):
+    """Annotator role cannot access review queue and returns 403."""
+    response = client.get("/api/review/queue?project_id=1", headers=annotator_headers)
+    assert response.status_code == 403

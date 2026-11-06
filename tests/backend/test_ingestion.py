@@ -38,7 +38,7 @@ def create_annotator(db_session, annotator_id, username):
     return annotator
 
 
-def test_upload_valid_csv(client, db_session):
+def test_upload_valid_csv(client, db_session, admin_headers):
     """Test successful CSV ingestion."""
 
     create_project(
@@ -68,6 +68,7 @@ def test_upload_valid_csv(client, db_session):
                 "text/csv",
             )
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -93,7 +94,7 @@ def test_upload_valid_csv(client, db_session):
     assert len(annotations) == 2
 
 
-def test_upload_valid_json(client, db_session):
+def test_upload_valid_json(client, db_session, admin_headers):
     """Test successful JSON ingestion."""
 
     create_project(
@@ -142,6 +143,7 @@ def test_upload_valid_json(client, db_session):
                 "application/json",
             )
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -152,7 +154,7 @@ def test_upload_valid_json(client, db_session):
     assert data["inserted_records"] == 2
 
 
-def test_upload_with_project_id_form(client, db_session):
+def test_upload_with_project_id_form(client, db_session, admin_headers):
     """Test ingestion using project_id supplied as a form field."""
 
     create_project(
@@ -183,6 +185,7 @@ def test_upload_with_project_id_form(client, db_session):
                 "text/csv",
             )
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -193,7 +196,7 @@ def test_upload_with_project_id_form(client, db_session):
     assert data["inserted_records"] == 1
 
 
-def test_upload_empty_file(client):
+def test_upload_empty_file(client, admin_headers):
     """Test rejection of an empty file."""
 
     file_bytes = io.BytesIO(b"")
@@ -207,12 +210,13 @@ def test_upload_empty_file(client):
                 "text/csv",
             )
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 400
 
 
-def test_upload_unsupported_file_extension(client):
+def test_upload_unsupported_file_extension(client, admin_headers):
     """Test rejection of unsupported file types."""
 
     file_bytes = io.BytesIO(b"dummy data")
@@ -226,6 +230,28 @@ def test_upload_unsupported_file_extension(client):
                 "application/octet-stream",
             )
         },
+        headers=admin_headers,
     )
 
     assert response.status_code == 400
+
+
+def test_upload_unauthenticated_returns_401(client):
+    """Unauthenticated file upload returns 401."""
+    file_bytes = io.BytesIO(b"dummy data")
+    response = client.post(
+        "/ingestion/upload",
+        files={"file": ("test.csv", file_bytes, "text/csv")},
+    )
+    assert response.status_code == 401
+
+
+def test_upload_insufficient_role_returns_403(client, annotator_headers):
+    """Annotator role lacks upload permissions and returns 403."""
+    file_bytes = io.BytesIO(b"dummy data")
+    response = client.post(
+        "/ingestion/upload",
+        files={"file": ("test.csv", file_bytes, "text/csv")},
+        headers=annotator_headers,
+    )
+    assert response.status_code == 403

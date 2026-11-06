@@ -22,7 +22,7 @@ const api = axios.create({
 // ── Request interceptor: attach JWT Bearer token ──────────────────
 api.interceptors.request.use((config) => {
   const token = getToken();
-  if (token && !token.startsWith('demo_token_')) {
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -33,13 +33,10 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const token = getToken();
-      // Only redirect on 401 if it's an actual backend JWT token failure
-      if (token && !token.startsWith('demo_token_')) {
-        localStorage.removeItem('aqg_auth_token');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
+      localStorage.removeItem('aqg_auth_token');
+      localStorage.removeItem('aqg_demo_user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

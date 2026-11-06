@@ -30,7 +30,73 @@ from app.models.item import Item
 from app.models.annotation import Annotation
 from app.models.trust_score import TrustScore
 from app.models.reroute_history import RerouteHistory
+from app.models.user import User, UserRole
+from app.core.security import hash_password
 from app.services.trust_score_service import compute_and_save_item_trust_score
+
+DEMO_USERS = [
+    {
+        "email": "admin@annotationops.io",
+        "full_name": "Admin User",
+        "role": UserRole.ADMIN,
+        "password": "demo12345",
+    },
+    {
+        "email": "pm@annotationops.io",
+        "full_name": "Project Manager",
+        "role": UserRole.PROJECT_MANAGER,
+        "password": "demo12345",
+    },
+    {
+        "email": "po@annotationops.io",
+        "full_name": "Product Owner",
+        "role": UserRole.PROJECT_MANAGER,
+        "password": "demo12345",
+    },
+    {
+        "email": "bob@annotationops.io",
+        "full_name": "Reviewer Bob",
+        "role": UserRole.REVIEWER,
+        "password": "demo12345",
+    },
+    {
+        "email": "dave@annotationops.io",
+        "full_name": "Annotator Dave",
+        "role": UserRole.ANNOTATOR,
+        "password": "demo12345",
+    },
+    {
+        "email": "sarah@annotationops.io",
+        "full_name": "Annotator Sarah",
+        "role": UserRole.ANNOTATOR,
+        "password": "demo12345",
+    },
+]
+
+
+def seed_demo_users(db=None):
+    """Seed real platform users for demo accounts so RBAC is properly enforced."""
+    close_db = False
+    if db is None:
+        db = SessionLocal()
+        close_db = True
+
+    try:
+        for u_data in DEMO_USERS:
+            existing = db.query(User).filter(User.email == u_data["email"]).first()
+            if not existing:
+                user = User(
+                    email=u_data["email"],
+                    full_name=u_data["full_name"],
+                    hashed_password=hash_password(u_data["password"]),
+                    role=u_data["role"],
+                    is_active=True,
+                )
+                db.add(user)
+        db.commit()
+    finally:
+        if close_db:
+            db.close()
 
 
 def seed_demo_data():
@@ -324,6 +390,10 @@ def seed_demo_data():
             db.add(conn2)
             db.commit()
             print("  * Seeded sample Database Connectors")
+
+        # 9. Seed demo users for auth
+        seed_demo_users(db)
+        print("  * Seeded Demo Users with RBAC roles")
 
         print("[OK] Demo data seeding completed successfully!")
     finally:

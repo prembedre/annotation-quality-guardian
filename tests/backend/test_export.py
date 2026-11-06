@@ -12,7 +12,7 @@ from app.models import (
 )
 
 
-def test_export_project_json(client, db_session):
+def test_export_project_json(client, db_session, admin_headers):
     """Test JSON project export."""
 
     project = Project(
@@ -68,7 +68,8 @@ def test_export_project_json(client, db_session):
     db_session.commit()
 
     response = client.get(
-        "/api/projects/30/export?format=json"
+        "/api/projects/30/export?format=json",
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -93,7 +94,7 @@ def test_export_project_json(client, db_session):
     )
 
 
-def test_export_project_csv(client, db_session):
+def test_export_project_csv(client, db_session, admin_headers):
     """Test CSV project export."""
 
     project = Project(
@@ -130,7 +131,8 @@ def test_export_project_csv(client, db_session):
     db_session.commit()
 
     response = client.get(
-        "/api/projects/31/export?format=csv"
+        "/api/projects/31/export?format=csv",
+        headers=admin_headers,
     )
 
     assert response.status_code == 200
@@ -152,17 +154,18 @@ def test_export_project_csv(client, db_session):
     assert "Bob" in csv_text
 
 
-def test_export_nonexistent_project(client):
+def test_export_nonexistent_project(client, admin_headers):
     """Test exporting a project that does not exist."""
 
     response = client.get(
-        "/api/projects/99999/export?format=json"
+        "/api/projects/99999/export?format=json",
+        headers=admin_headers,
     )
 
     assert response.status_code == 404
 
 
-def test_export_invalid_format(client, db_session):
+def test_export_invalid_format(client, db_session, admin_headers):
     """Test invalid export format."""
 
     project = Project(
@@ -175,7 +178,23 @@ def test_export_invalid_format(client, db_session):
     db_session.commit()
 
     response = client.get(
-        "/api/projects/32/export?format=xml"
+        "/api/projects/32/export?format=xml",
+        headers=admin_headers,
     )
 
     assert response.status_code == 400
+
+
+def test_export_unauthenticated_returns_401(client):
+    """Unauthenticated requests to export must return 401."""
+    response = client.get("/api/projects/1/export")
+    assert response.status_code == 401
+
+
+def test_export_insufficient_role_returns_403(client, annotator_headers, db_session):
+    """Annotator role lacks permission to export datasets and must return 403."""
+    project = Project(id=1, name="P1", label_set=["a", "b"])
+    db_session.add(project)
+    db_session.commit()
+    response = client.get("/api/projects/1/export", headers=annotator_headers)
+    assert response.status_code == 403

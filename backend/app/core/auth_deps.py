@@ -100,15 +100,8 @@ def get_current_user(
         except JWTError:
             raise credentials_exception
 
-    # For strict auth check endpoint like /auth/me when token is omitted
-    if request.url.path.endswith("/auth/me"):
-        raise credentials_exception
-
-    # Unauthenticated / demo fallback for operational endpoints
-    user = db.query(User).filter(User.is_active.is_(True)).first()
-    if user:
-        return user
-    return _get_or_create_default_admin(db)
+    # No token was provided — require authentication
+    raise credentials_exception
 
 
 # ── Role guard ────────────────────────────────────────────────────────────────

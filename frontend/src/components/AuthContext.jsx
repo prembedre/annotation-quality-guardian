@@ -34,19 +34,6 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    if (token.startsWith('demo_token_')) {
-      try {
-        const storedDemo = localStorage.getItem('aqg_demo_user');
-        if (storedDemo) {
-          setUser(JSON.parse(storedDemo));
-        }
-      } catch (e) {
-        console.error('Failed to parse demo user', e);
-      }
-      setLoading(false);
-      return;
-    }
-
     fetchMe()
       .then((profile) => setUser(profile))
       .catch(() => {
@@ -67,29 +54,18 @@ export function AuthProvider({ children }) {
 
   const loginAsDemo = useCallback(async (roleKey) => {
     const demoProfiles = {
-      system_admin: { id: 1, email: 'admin@annotationops.io', full_name: 'Admin User', role: 'admin' },
-      product_owner: { id: 2, email: 'po@annotationops.io', full_name: 'Product Owner', role: 'product_owner' },
-      project_manager: { id: 3, email: 'pm@annotationops.io', full_name: 'Project Manager', role: 'project_manager' },
-      annotator_1: { id: 4, email: 'dave@annotationops.io', full_name: 'Annotator 1', role: 'annotator' },
-      annotator_2: { id: 5, email: 'sarah@annotationops.io', full_name: 'Annotator 2', role: 'annotator' },
-      reviewer: { id: 6, email: 'bob@annotationops.io', full_name: 'Reviewer', role: 'reviewer' },
+      system_admin: { email: 'admin@annotationops.io', password: 'demo12345' },
+      product_owner: { email: 'po@annotationops.io', password: 'demo12345' },
+      project_manager: { email: 'pm@annotationops.io', password: 'demo12345' },
+      annotator_1: { email: 'dave@annotationops.io', password: 'demo12345' },
+      annotator_2: { email: 'sarah@annotationops.io', password: 'demo12345' },
+      reviewer: { email: 'bob@annotationops.io', password: 'demo12345' },
     };
 
     const targetUser = demoProfiles[roleKey] || demoProfiles.system_admin;
-
-    try {
-      // Attempt actual backend login if credentials exist
-      const data = await authLogin(targetUser.email, 'demo12345');
-      setToken(data.access_token);
-      setUser(data.user);
-    } catch {
-      // Fallback: seed simulated demo session in localStorage
-      const mockToken = `demo_token_${targetUser.role}_${Date.now()}`;
-      localStorage.setItem('aqg_auth_token', mockToken);
-      localStorage.setItem('aqg_demo_user', JSON.stringify(targetUser));
-      setToken(mockToken);
-      setUser(targetUser);
-    }
+    const data = await authLogin(targetUser.email, targetUser.password);
+    setToken(data.access_token);
+    setUser(data.user);
     navigate('/');
   }, [navigate]);
 

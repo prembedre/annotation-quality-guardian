@@ -26,6 +26,14 @@ def sample_project_and_annotators(db_session):
     return proj
 
 
+@pytest.fixture(autouse=True)
+def authenticate_client(client, admin_headers):
+    """Authenticate client requests as Admin for Phase 3 integration testing."""
+    client.headers.update(admin_headers)
+    yield
+    client.headers.clear()
+
+
 # ==============================================================================
 # TASK 1 & TASK 2 & TASK 8: WEBHOOK RECEIVER & INGESTION
 # ==============================================================================

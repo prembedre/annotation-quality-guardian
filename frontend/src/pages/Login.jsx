@@ -17,7 +17,7 @@ import { useAuth } from '../components/AuthContext';
 import './Login.css';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginAsDemo } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -110,7 +110,7 @@ export default function Login() {
                   className="ops-forgot-link"
                   onClick={(e) => {
                     e.preventDefault();
-                    alert('Password reset link has been dispatched to your email.');
+                    setErrorMessage('Password reset request logged. Please contact your administrator.');
                   }}
                 >
                   Forgot password?
@@ -159,13 +159,58 @@ export default function Login() {
               )}
             </button>
 
+            {/* Quick Demo Sign-In */}
+            <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: '1rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.5rem', textAlign: 'center' }}>
+                Quick Demo Sign-In
+              </span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="ops-btn-secondary"
+                  style={{ padding: '0.4rem 0.2rem', fontSize: '0.75rem', textAlign: 'center' }}
+                  onClick={() => loginAsDemo('system_admin')}
+                  disabled={isLoading}
+                >
+                  Admin
+                </button>
+                <button
+                  type="button"
+                  className="ops-btn-secondary"
+                  style={{ padding: '0.4rem 0.2rem', fontSize: '0.75rem', textAlign: 'center' }}
+                  onClick={() => loginAsDemo('project_manager')}
+                  disabled={isLoading}
+                >
+                  PM
+                </button>
+                <button
+                  type="button"
+                  className="ops-btn-secondary"
+                  style={{ padding: '0.4rem 0.2rem', fontSize: '0.75rem', textAlign: 'center' }}
+                  onClick={() => loginAsDemo('reviewer')}
+                  disabled={isLoading}
+                >
+                  Reviewer
+                </button>
+                <button
+                  type="button"
+                  className="ops-btn-secondary"
+                  style={{ padding: '0.4rem 0.2rem', fontSize: '0.75rem', textAlign: 'center' }}
+                  onClick={() => loginAsDemo('annotator_1')}
+                  disabled={isLoading}
+                >
+                  Annotator
+                </button>
+              </div>
+            </div>
+
             {/* Registration link */}
             <div className="ops-card-footer">
               <span>Don't have an account?</span>{' '}
               <button
                 type="button"
                 className="ops-link-btn"
-                onClick={() => alert('Registration request sent to your workspace administrator.')}
+                onClick={() => setErrorMessage('Self-registration is disabled. Please contact your workspace administrator.')}
               >
                 Register
               </button>

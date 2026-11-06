@@ -85,8 +85,7 @@ def db_session():
 @pytest.fixture(scope="function")
 def client(db_session):
     """
-    Create a FastAPI TestClient using the PostgreSQL
-    test database session.
+    Create a FastAPI TestClient using the test database session.
     """
 
     def override_get_db():
@@ -101,3 +100,49 @@ def client(db_session):
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def admin_user(db_session):
+    from app.models.user import User, UserRole
+    from app.core.security import hash_password
+    user = db_session.query(User).filter(User.role == UserRole.ADMIN).first()
+    if not user:
+        user = User(
+            email="testadmin@aqg.test",
+            full_name="Test Admin",
+            hashed_password=hash_password("TestAdmin1234!"),
+            role=UserRole.ADMIN,
+            is_active=True,
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def admin_headers(admin_user):
+    from app.core.security import create_access_token
+    token = create_access_token(data={"sub": admin_user.email})
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def annotator_headers(db_session):
+    from app.models.user import User, UserRole
+    from app.core.security import hash_password, create_access_token
+    user = db_session.query(User).filter(User.role == UserRole.ANNOTATOR).first()
+    if not user:
+        user = User(
+            email="testannotator@aqg.test",
+            full_name="Test Annotator",
+            hashed_password=hash_password("TestAnnot1234!"),
+            role=UserRole.ANNOTATOR,
+            is_active=True,
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+    token = create_access_token(data={"sub": user.email})
+    return {"Authorization": f"Bearer {token}"}

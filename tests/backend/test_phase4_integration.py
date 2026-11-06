@@ -28,6 +28,14 @@ def sample_project_and_annotators(db_session):
     return proj
 
 
+@pytest.fixture(autouse=True)
+def authenticate_client(client, admin_headers):
+    """Authenticate client requests as Admin for Phase 4 integration testing."""
+    client.headers.update(admin_headers)
+    yield
+    client.headers.clear()
+
+
 @pytest.fixture
 def external_sqlite_db(tmp_path):
     """Create a temporary external database simulating a 3rd-party labeling platform DB."""

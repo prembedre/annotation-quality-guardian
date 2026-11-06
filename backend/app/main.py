@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
             Base.metadata.create_all(bind=engine)
             from app.core.db_patch import ensure_schema_compatibility
             ensure_schema_compatibility(engine)
+            from app.core.seed_demo_data import seed_demo_users
+            seed_demo_users()
         except Exception:
             pass
 
