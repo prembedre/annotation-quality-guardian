@@ -49,5 +49,6 @@ class ProjectResponse(ProjectBase):
 
     id: int
     automation_enabled: bool = False
+    is_archived: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None

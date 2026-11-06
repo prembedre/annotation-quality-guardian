@@ -62,6 +62,13 @@ class Project(Base):
         doc="Whether Phase 4 automation is enabled for this project",
     )
 
+    is_archived = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+        doc="Whether this project is archived",
+    )
+
     # Relationships
 
     items = relationship(

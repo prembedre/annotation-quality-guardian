@@ -29,6 +29,12 @@ def ensure_schema_compatibility(engine: Engine) -> None:
                         text("ALTER TABLE projects ADD COLUMN automation_enabled BOOLEAN NOT NULL DEFAULT 0")
                     )
                     conn.commit()
+                if "is_archived" not in project_cols:
+                    logger.info("Adding missing 'is_archived' column to projects table")
+                    conn.execute(
+                        text("ALTER TABLE projects ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT 0")
+                    )
+                    conn.commit()
 
             # 2. annotators table
             if "annotators" in table_names:

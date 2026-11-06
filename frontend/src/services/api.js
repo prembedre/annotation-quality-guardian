@@ -59,6 +59,16 @@ export async function createProject(payload) {
   return data;
 }
 
+export async function duplicateProject(id) {
+  const { data } = await api.post(`/projects/${id}/duplicate`);
+  return data;
+}
+
+export async function archiveProject(id) {
+  const { data } = await api.post(`/projects/${id}/archive`);
+  return data;
+}
+
 // ── Annotations ─────────────────────────────────────
 export async function fetchAnnotations(params = {}) {
   const { data } = await api.get('/annotations', { params });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { fetchProjects, createProject } from '../services/api';
+import api, { fetchProjects, createProject, duplicateProject, archiveProject } from '../services/api';
 import {
   FolderGit2,
   Plus,
@@ -23,10 +23,13 @@ import {
   LoadingState,
   useToast,
   DatasetUploadModal,
+  useProject,
 } from '../components';
 
 export default function Projects() {
+  const { refreshProjects } = useProject();
   const [projects, setProjects] = useState([]);
+  const [projectSummaries, setProjectSummaries] = useState({});
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -37,18 +40,35 @@ export default function Projects() {
   const [error, setError] = useState('');
   const [activeMenuId, setActiveMenuId] = useState(null);
 
-  const { success, error: toastError, info } = useToast();
+  const { success, error: toastError } = useToast();
 
-  const loadProjects = useCallback(() => {
+  const loadProjects = useCallback(async () => {
     setLoading(true);
     setError('');
-    fetchProjects()
-      .then((data) => setProjects(Array.isArray(data) ? data : data?.projects || []))
-      .catch((err) => {
-        console.error('Failed to fetch projects:', err);
-        setError(err.response?.data?.detail || 'Failed to load projects.');
-      })
-      .finally(() => setLoading(false));
+    try {
+      const data = await fetchProjects();
+      const list = Array.isArray(data) ? data : data?.projects || [];
+      setProjects(list);
+
+      // Fetch real per-project score summary (kappa, item counts, annotator counts)
+      const summariesMap = {};
+      await Promise.all(
+        list.map(async (p) => {
+          try {
+            const res = await api.get('/scores/summary', { params: { project_id: p.id } });
+            summariesMap[p.id] = res.data;
+          } catch {
+            // Keep empty if summary endpoint fails
+          }
+        })
+      );
+      setProjectSummaries(summariesMap);
+    } catch (err) {
+      console.error('Failed to fetch projects:', err);
+      setError(err.response?.data?.detail || 'Failed to load projects.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -68,6 +88,7 @@ export default function Projects() {
       setDescription('');
       setShowModal(false);
       loadProjects();
+      refreshProjects?.();
     } catch (err) {
       console.error('Failed to create project:', err);
       const msg = err.response?.data?.detail || 'Failed to create project.';
@@ -75,6 +96,32 @@ export default function Projects() {
       toastError(msg);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDuplicate = async (projId, projName) => {
+    try {
+      setActiveMenuId(null);
+      const copy = await duplicateProject(projId);
+      success(`Project "${projName}" duplicated as "${copy.name}".`);
+      loadProjects();
+      refreshProjects?.();
+    } catch (err) {
+      console.error('Failed to duplicate project:', err);
+      toastError(err.response?.data?.detail || 'Failed to duplicate project.');
+    }
+  };
+
+  const handleArchive = async (projId, projName) => {
+    try {
+      setActiveMenuId(null);
+      await archiveProject(projId);
+      success(`Project "${projName}" archived successfully.`);
+      loadProjects();
+      refreshProjects?.();
+    } catch (err) {
+      console.error('Failed to archive project:', err);
+      toastError(err.response?.data?.detail || 'Failed to archive project.');
     }
   };
 
@@ -229,6 +276,10 @@ export default function Projects() {
           {projects.map((project, idx) => {
             const coverGradient = projectCovers[idx % projectCovers.length];
             const isMenuOpen = activeMenuId === project.id;
+            const summary = projectSummaries[project.id];
+            const itemsCount = summary?.total_items ?? project.total_items ?? 0;
+            const annotatorsCount = summary?.annotators_count ?? project.annotators_count ?? 0;
+            const kappa = summary?.kappa;
 
             return (
               <div
@@ -299,10 +350,7 @@ export default function Projects() {
                             <button
                               type="button"
                               className="user-menu-item"
-                              onClick={() => {
-                                info(`Duplicate initiated for "${project.name}"`);
-                                setActiveMenuId(null);
-                              }}
+                              onClick={() => handleDuplicate(project.id, project.name)}
                             >
                               <Copy size={13} />
                               <span>Duplicate</span>
@@ -310,10 +358,7 @@ export default function Projects() {
                             <button
                               type="button"
                               className="user-menu-item"
-                              onClick={() => {
-                                info(`Archived "${project.name}"`);
-                                setActiveMenuId(null);
-                              }}
+                              onClick={() => handleArchive(project.id, project.name)}
                             >
                               <Archive size={13} />
                               <span>Archive</span>
@@ -343,21 +388,29 @@ export default function Projects() {
                     <div>
                       <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Items</div>
                       <div className="mono-cell" style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginTop: '2px' }}>
-                        {project.total_items ?? 50}
+                        {itemsCount}
                       </div>
                     </div>
 
                     <div>
                       <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Annotators</div>
                       <div className="mono-cell" style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginTop: '2px' }}>
-                        {project.annotators_count ?? 3}
+                        {annotatorsCount}
                       </div>
                     </div>
 
                     <div>
                       <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Kappa</div>
-                      <div className="mono-cell" style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--status-good-text)', marginTop: '2px' }}>
-                        0.782
+                      <div
+                        className="mono-cell"
+                        style={{
+                          fontWeight: 700,
+                          fontSize: '0.95rem',
+                          color: kappa != null ? (kappa >= 0.7 ? 'var(--status-good-text)' : 'var(--status-medium-text)') : 'var(--text-muted)',
+                          marginTop: '2px',
+                        }}
+                      >
+                        {kappa != null ? kappa.toFixed(3) : '—'}
                       </div>
                     </div>
                   </div>

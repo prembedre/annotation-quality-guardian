@@ -169,16 +169,26 @@ async def compute_scores(
 async def get_score_summary(
     project_id: int = Query(..., description="Project ID"),
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER)),
+    _: User = Depends(get_current_user),
 ):
     """
-    Return aggregate score metrics for a project (kappa, gold accuracy, avg trust score).
-    Used by dashboard and score header cards.
+    Return aggregate score metrics for a project (kappa, gold accuracy, avg trust score, items, annotators).
+    Used by dashboard, scores, and projects views.
     """
     from app.services.kappa_service import compute_fleiss_kappa
     from app.services.gold_standard_service import compute_gold_accuracy
+    from app.models.annotation import Annotation
+
+    item_count = db.query(Item).filter(Item.project_id == project_id).count()
+    annotators_count = (
+        db.query(Annotation.annotator_id)
+        .filter(Annotation.project_id == project_id)
+        .distinct()
+        .count()
+    )
 
     trust_scores = db.query(TrustScore).filter(TrustScore.project_id == project_id).all()
+    kappa_result = compute_fleiss_kappa(db=db, project_id=project_id)
 
     if not trust_scores:
         return {
@@ -186,15 +196,17 @@ async def get_score_summary(
             "has_data": False,
             "avg_trust_score": None,
             "flagged_count": 0,
-            "total_items": 0,
-            "kappa": None,
+            "total_items": item_count,
+            "annotators_count": annotators_count,
+            "kappa": kappa_result.get("kappa"),
+            "kappa_items_evaluated": kappa_result.get("items_evaluated", 0),
             "avg_gold_accuracy": None,
+            "gold_annotator_count": 0,
         }
 
     avg_trust = sum(float(ts.final_score or 0) for ts in trust_scores) / len(trust_scores)
     flagged = sum(1 for ts in trust_scores if ts.flagged)
 
-    kappa_result = compute_fleiss_kappa(db=db, project_id=project_id)
     gold_result = compute_gold_accuracy(db=db, project_id=project_id)
     gold_annotators = gold_result.get("annotators", [])
     avg_gold = (
@@ -207,7 +219,8 @@ async def get_score_summary(
         "has_data": True,
         "avg_trust_score": round(avg_trust, 4),
         "flagged_count": flagged,
-        "total_items": len(trust_scores),
+        "total_items": item_count if item_count > 0 else len(trust_scores),
+        "annotators_count": annotators_count,
         "kappa": kappa_result.get("kappa"),
         "kappa_items_evaluated": kappa_result.get("items_evaluated", 0),
         "avg_gold_accuracy": round(avg_gold, 4) if avg_gold is not None else None,
