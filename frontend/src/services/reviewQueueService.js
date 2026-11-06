@@ -45,10 +45,18 @@ export async function getReviewQueue(params = {}) {
  * Export review queue in the specified format from backend API
  */
 export async function exportReviewQueue(projectId, format = 'csv') {
-  // We need to fetch the file as a blob
-  const response = await api.get(`/projects/${projectId}/export`, {
-    params: { format },
-    responseType: 'blob', // Important for handling binary/file downloads
+  // Gracefully handle reversed args if any caller passes (format, { projectId, ... })
+  let effectiveProjectId = projectId;
+  let effectiveFormat = format;
+
+  if (typeof projectId === 'string' && (projectId === 'csv' || projectId === 'json') && typeof format === 'object') {
+    effectiveFormat = projectId;
+    effectiveProjectId = format?.projectId || 1;
+  }
+
+  const response = await api.get(`/projects/${effectiveProjectId}/export`, {
+    params: { format: effectiveFormat },
+    responseType: 'blob',
   });
   
   return response.data;

@@ -104,21 +104,28 @@ export default function ReviewQueue() {
   }, []);
 
   const handleExport = useCallback(
-    async (format, scope) => {
+    async (format) => {
       try {
-        await exportReviewQueue(format, {
-          status: scope === 'flagged' ? 'flagged' : statusFilter,
-          search,
-          riskFilter,
-          projectId: currentProjectId,
-        });
-        success(`Successfully generated ${format.toUpperCase()} export!`);
+        const blobData = await exportReviewQueue(currentProjectId, format);
+        const mimeType = format === 'json' ? 'application/json' : 'text/csv';
+        const blob = blobData instanceof Blob ? blobData : new Blob([blobData], { type: mimeType });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `project_${currentProjectId}_review_export.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        success(`Successfully generated and downloaded ${format.toUpperCase()} export!`);
       } catch (exportErr) {
         console.error('Export failed:', exportErr);
-        toastError('Failed to export dataset. Please try again.');
+        const msg = exportErr?.response?.data?.detail || 'Failed to export dataset. Please try again.';
+        toastError(msg);
       }
     },
-    [statusFilter, search, riskFilter, currentProjectId, success, toastError]
+    [currentProjectId, success, toastError]
   );
 
   const handleResolve = useCallback(
