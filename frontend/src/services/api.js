@@ -70,6 +70,27 @@ export async function createAnnotation(payload) {
   return data;
 }
 
+export async function uploadDataset(file, projectId = null, onProgress = null) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (projectId) {
+    formData.append('project_id', projectId);
+  }
+
+  const { data } = await api.post('/annotations/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    onUploadProgress: (progressEvent) => {
+      if (onProgress && progressEvent.total) {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress(percentCompleted);
+      }
+    },
+  });
+  return data;
+}
+
 // ── Scores ──────────────────────────────────────────
 export async function fetchScores(params = {}) {
   const { data } = await api.get('/scores/', { params });

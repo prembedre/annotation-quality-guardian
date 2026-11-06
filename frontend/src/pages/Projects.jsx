@@ -22,12 +22,15 @@ import {
   ErrorState,
   LoadingState,
   useToast,
+  DatasetUploadModal,
 } from '../components';
 
 export default function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [droppedFile, setDroppedFile] = useState(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -159,20 +162,48 @@ export default function Projects() {
         </form>
       </Modal>
 
+      {/* Dataset Upload Modal */}
+      <DatasetUploadModal
+        isOpen={showUploadModal}
+        onClose={() => {
+          setShowUploadModal(false);
+          setDroppedFile(null);
+        }}
+        projects={projects}
+        initialFile={droppedFile}
+        onSuccess={() => {
+          loadProjects();
+          success('Dataset uploaded and processed successfully!');
+        }}
+      />
+
       {/* Standard Page Header */}
       <PageHeader
         eyebrow="Dataset Repositories & Workspaces"
         title="Data Projects"
         subtitle="Manage labeling initiatives, consensus benchmarks, and project-specific scoring models."
         actions={
-          <button
-            type="button"
-            className="primary-btn"
-            onClick={() => setShowModal(true)}
-          >
-            <Plus size={15} />
-            <span>New Project</span>
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => {
+                setDroppedFile(null);
+                setShowUploadModal(true);
+              }}
+            >
+              <UploadCloud size={15} />
+              <span>Upload Dataset</span>
+            </button>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => setShowModal(true)}
+            >
+              <Plus size={15} />
+              <span>New Project</span>
+            </button>
+          </div>
         }
       />
 
@@ -338,7 +369,30 @@ export default function Projects() {
           {/* Add New Project Dashed Card with Drag-and-Drop File Import Affordance */}
           <div
             className="card"
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setDroppedFile(null);
+              setShowUploadModal(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.currentTarget.style.borderColor = 'var(--accent-brand)';
+              e.currentTarget.style.background = 'rgba(14, 165, 233, 0.08)';
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.currentTarget.style.borderColor = 'var(--border-medium)';
+              e.currentTarget.style.background = 'transparent';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.currentTarget.style.borderColor = 'var(--border-medium)';
+              e.currentTarget.style.background = 'transparent';
+              const file = e.dataTransfer.files?.[0];
+              if (file) {
+                setDroppedFile(file);
+                setShowUploadModal(true);
+              }
+            }}
             style={{
               padding: '2rem 1.5rem',
               marginBottom: 0,
@@ -378,10 +432,10 @@ export default function Projects() {
               <UploadCloud size={22} />
             </div>
             <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Add New Project or Drop CSV
+              Upload Dataset or Drop CSV / JSON
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', maxWidth: '240px', marginTop: '4px' }}>
-              Drag and drop an annotation CSV or JSON dataset to initialize a workspace instantly.
+              Drag and drop an annotation CSV or JSON dataset to ingest records and compute quality scores.
             </p>
           </div>
         </div>
