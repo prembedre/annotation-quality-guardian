@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from app.models import Project, Annotator, Item
 from app.celery_app import celery_app
+from app.core.config import settings, EnvironmentType
 
 
 @pytest.fixture(autouse=True)
@@ -122,3 +123,50 @@ def test_jobs_insufficient_role_returns_403(client, annotator_headers):
         headers=annotator_headers,
     )
     assert response.status_code == 403
+
+
+def test_job_submission_redis_down_returns_503(client, admin_headers, db_session):
+    """When Redis is down and in production mode, returns 503 Service Unavailable."""
+    project = Project(id=990, name="Redis Down Test", label_set=["A", "B"])
+    annotator = Annotator(id=991, username="ann_down")
+    db_session.add_all([project, annotator])
+    db_session.commit()
+
+    with patch("app.tasks.behavioral_tasks.compute_behavioral_score_task.apply_async", side_effect=ConnectionError("Cannot connect to redis://localhost:6379")):
+        with patch.object(settings, "ENV", EnvironmentType.PRODUCTION):
+            response = client.post(
+                "/api/jobs/behavioral",
+                json={
+                    "project_id": 990,
+                    "annotator_id": 991,
+                    "anomaly_score": 0.5,
+                },
+                headers=admin_headers,
+            )
+            assert response.status_code == 503
+            assert "Redis" in response.json()["detail"]
+            assert "unreachable" in response.json()["detail"]
+
+
+def test_job_submission_redis_down_dev_fallback_to_eager(client, admin_headers, db_session):
+    """When Redis is down in dev mode, falls back to eager execution without hanging."""
+    project = Project(id=992, name="Redis Fallback Test", label_set=["A", "B"])
+    annotator = Annotator(id=993, username="ann_eager")
+    db_session.add_all([project, annotator])
+    db_session.commit()
+
+    with patch("app.tasks.behavioral_tasks.compute_behavioral_score_task.apply_async", side_effect=ConnectionError("Redis connection refused")):
+        with patch.object(settings, "ENV", EnvironmentType.DEVELOPMENT):
+            response = client.post(
+                "/api/jobs/behavioral",
+                json={
+                    "project_id": 992,
+                    "annotator_id": 993,
+                    "anomaly_score": 0.3,
+                },
+                headers=admin_headers,
+            )
+            assert response.status_code == 202
+            data = response.json()
+            assert "job_id" in data
+            assert data["status"] in {"COMPLETED", "PENDING"}

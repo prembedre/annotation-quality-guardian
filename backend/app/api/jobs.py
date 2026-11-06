@@ -9,6 +9,7 @@ from celery.result import AsyncResult
 
 from app.celery_app import celery_app
 from app.core.auth_deps import get_current_user, require_role
+from app.core.config import settings
 from app.models.user import User, UserRole
 from app.tasks.behavioral_tasks import compute_behavioral_score_task
 from app.tasks.embedding_tasks import process_project_embeddings_task
@@ -26,6 +27,30 @@ router = APIRouter(
 )
 
 
+def _dispatch_task(task_func, *args, **kwargs):
+    """
+    Safely dispatch a Celery task without hanging if Redis is down.
+    Tries apply_async with retry=False. If Redis broker connection fails,
+    in development mode it falls back to eager synchronous execution;
+    in production or if eager execution is not desired, returns HTTP 503.
+    """
+    try:
+        return task_func.apply_async(args=args, kwargs=kwargs, retry=False)
+    except Exception as exc:
+        if settings.is_development:
+            try:
+                return task_func.apply(args=args, kwargs=kwargs)
+            except Exception as eager_exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Background job execution failed: {eager_exc}",
+                )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Background job broker (Redis) is currently unreachable: {exc}. Please verify Redis service is running.",
+        )
+
+
 @router.post("/behavioral", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
 )
@@ -33,30 +58,25 @@ async def submit_behavioral_job(payload: BehavioralJobRequest):
     """
     Trigger an asynchronous behavioral anomaly computation job.
     """
-    try:
-        task = compute_behavioral_score_task.delay(
-            project_id=payload.project_id,
-            annotator_id=payload.annotator_id,
-            anomaly_score=payload.anomaly_score,
-            item_id=payload.item_id,
-            time_score=payload.time_score,
-            streak_score=payload.streak_score,
-            anomaly_flag=payload.anomaly_flag,
-            reason=payload.reason,
-            details=payload.details,
-        )
-        return JobStatusResponse(
-            job_id=task.id,
-            status="PENDING",
-            task_name=task.name or "compute_behavioral_score_task",
-            created_at=datetime.utcnow(),
-            result_available=False,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to submit behavioral job to background queue: {str(exc)}",
-        )
+    task = _dispatch_task(
+        compute_behavioral_score_task,
+        project_id=payload.project_id,
+        annotator_id=payload.annotator_id,
+        anomaly_score=payload.anomaly_score,
+        item_id=payload.item_id,
+        time_score=payload.time_score,
+        streak_score=payload.streak_score,
+        anomaly_flag=payload.anomaly_flag,
+        reason=payload.reason,
+        details=payload.details,
+    )
+    return JobStatusResponse(
+        job_id=str(task.id),
+        status="COMPLETED" if getattr(task, "successful", lambda: False)() else "PENDING",
+        task_name=getattr(task, "name", None) or "compute_behavioral_score_task",
+        created_at=datetime.utcnow(),
+        result_available=getattr(task, "ready", lambda: False)(),
+    )
 
 
 @router.post("/embedding", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED,
@@ -66,24 +86,19 @@ async def submit_embedding_job(payload: EmbeddingJobRequest):
     """
     Trigger an asynchronous embedding outlier calculation job for a project.
     """
-    try:
-        task = process_project_embeddings_task.delay(
-            project_id=payload.project_id,
-            model_name=payload.model_name,
-            outlier_threshold=payload.outlier_threshold,
-        )
-        return JobStatusResponse(
-            job_id=task.id,
-            status="PENDING",
-            task_name=task.name or "process_project_embeddings_task",
-            created_at=datetime.utcnow(),
-            result_available=False,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to submit embedding job to background queue: {str(exc)}",
-        )
+    task = _dispatch_task(
+        process_project_embeddings_task,
+        project_id=payload.project_id,
+        model_name=payload.model_name,
+        outlier_threshold=payload.outlier_threshold,
+    )
+    return JobStatusResponse(
+        job_id=str(task.id),
+        status="COMPLETED" if getattr(task, "successful", lambda: False)() else "PENDING",
+        task_name=getattr(task, "name", None) or "process_project_embeddings_task",
+        created_at=datetime.utcnow(),
+        result_available=getattr(task, "ready", lambda: False)(),
+    )
 
 
 @router.post("/trust-score", response_model=JobStatusResponse, status_code=status.HTTP_202_ACCEPTED,
@@ -93,31 +108,27 @@ async def submit_trust_score_job(payload: TrustScoreJobRequest):
     """
     Trigger an asynchronous multi-signal unified trust score calculation job.
     """
-    try:
-        if payload.item_id is not None:
-            task = compute_item_trust_score_task.delay(
-                project_id=payload.project_id,
-                item_id=payload.item_id,
-                weights=payload.weights,
-            )
-        else:
-            task = compute_project_trust_scores_task.delay(
-                project_id=payload.project_id,
-                weights=payload.weights,
-            )
+    if payload.item_id is not None:
+        task = _dispatch_task(
+            compute_item_trust_score_task,
+            project_id=payload.project_id,
+            item_id=payload.item_id,
+            weights=payload.weights,
+        )
+    else:
+        task = _dispatch_task(
+            compute_project_trust_scores_task,
+            project_id=payload.project_id,
+            weights=payload.weights,
+        )
 
-        return JobStatusResponse(
-            job_id=task.id,
-            status="PENDING",
-            task_name=task.name or "compute_trust_scores_task",
-            created_at=datetime.utcnow(),
-            result_available=False,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to submit trust score job to background queue: {str(exc)}",
-        )
+    return JobStatusResponse(
+        job_id=str(task.id),
+        status="COMPLETED" if getattr(task, "successful", lambda: False)() else "PENDING",
+        task_name=getattr(task, "name", None) or "compute_trust_scores_task",
+        created_at=datetime.utcnow(),
+        result_available=getattr(task, "ready", lambda: False)(),
+    )
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse,

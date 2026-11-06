@@ -28,7 +28,12 @@ celery_app.conf.update(
     task_track_started=True,
     task_always_eager=settings.CELERY_TASK_ALWAYS_EAGER,
     result_expires=86400,  # 24 hours
-    broker_connection_retry_on_startup=True,
+    broker_connection_retry=False,
+    broker_connection_max_retries=1,
+    broker_connection_timeout=1.0,
+    redis_socket_connect_timeout=1.0,
+    redis_socket_timeout=1.0,
+    broker_connection_retry_on_startup=False,
 )
 
 
