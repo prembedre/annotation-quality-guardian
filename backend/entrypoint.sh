@@ -46,7 +46,8 @@ echo "==> [AQG Entrypoint] Running database migrations..."
 if alembic upgrade head; then
     echo "==> [AQG Entrypoint] Database migrations applied successfully."
 else
-    echo "==> [AQG Entrypoint] Warning: Migration failed or database already up-to-date. Continuing..."
+    echo "==> [AQG Entrypoint] ERROR: Database migration failed. Aborting startup."
+    exit 1
 fi
 
 # Optional seed demo data on fresh setup if SEED_DEMO_DATA=true

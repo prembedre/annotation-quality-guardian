@@ -36,8 +36,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove the persistent automation_enabled setting."""
-
-    op.drop_column(
-        "projects",
-        "automation_enabled",
-    )
+    with op.batch_alter_table("projects", schema=None) as batch_op:
+        batch_op.drop_column("automation_enabled")

@@ -45,6 +45,53 @@ def upgrade() -> None:
         )
 
     # ==========================================================
+    # 0b. Add Phase 2 columns to annotators, items, and annotations
+    # ==========================================================
+
+    annotator_cols = {col["name"] for col in inspector.get_columns("annotators")}
+    if "username" not in annotator_cols:
+        with op.batch_alter_table("annotators", schema=None) as batch_op:
+            batch_op.add_column(sa.Column("username", sa.String(100), nullable=True))
+
+    item_cols = {col["name"] for col in inspector.get_columns("items")}
+    with op.batch_alter_table("items", schema=None) as batch_op:
+        if "project_id" not in item_cols:
+            batch_op.add_column(sa.Column("project_id", sa.Integer(), nullable=True))
+            batch_op.create_foreign_key(
+                "fk_items_project",
+                "projects",
+                ["project_id"],
+                ["id"],
+                ondelete="CASCADE",
+            )
+        if "external_id" not in item_cols:
+            batch_op.add_column(sa.Column("external_id", sa.String(255), nullable=True))
+        if "is_gold" not in item_cols:
+            batch_op.add_column(sa.Column("is_gold", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+        if "gold_label" not in item_cols:
+            batch_op.add_column(sa.Column("gold_label", sa.String(255), nullable=True))
+
+    ann_cols = {col["name"] for col in inspector.get_columns("annotations")}
+    with op.batch_alter_table("annotations", schema=None) as batch_op:
+        if "project_id" not in ann_cols:
+            batch_op.add_column(sa.Column("project_id", sa.Integer(), nullable=True))
+            batch_op.create_foreign_key(
+                "fk_annotations_project",
+                "projects",
+                ["project_id"],
+                ["id"],
+                ondelete="CASCADE",
+            )
+        if "duration_ms" not in ann_cols:
+            batch_op.add_column(sa.Column("duration_ms", sa.Integer(), nullable=True))
+        if "metadata" not in ann_cols:
+            batch_op.add_column(sa.Column("metadata", sa.JSON(), nullable=False, server_default="{}"))
+        if "created_at" not in ann_cols:
+            batch_op.add_column(sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()))
+        if "updated_at" not in ann_cols:
+            batch_op.add_column(sa.Column("updated_at", sa.DateTime(), nullable=True, server_default=sa.func.now()))
+
+    # ==========================================================
     # 1. Behavioral scoring results
     # ==========================================================
 
@@ -352,25 +399,23 @@ def upgrade() -> None:
     # Phase 1 score is NOT NULL, therefore every existing
     # Phase 1 trust score should now have final_score.
 
-    op.alter_column(
-        "trust_scores",
-        "final_score",
-        existing_type=sa.Numeric(10, 6),
-        nullable=False,
-    )
-
     # ==========================================================
-    # 5. Add trust_scores -> projects foreign key
+    # 4. Alter final_score to NOT NULL & 5. Add trust_scores -> projects foreign key
     # ==========================================================
 
-    op.create_foreign_key(
-        "fk_trust_scores_project",
-        "trust_scores",
-        "projects",
-        ["project_id"],
-        ["id"],
-        ondelete="CASCADE",
-    )
+    with op.batch_alter_table("trust_scores", schema=None) as batch_op:
+        batch_op.alter_column(
+            "final_score",
+            existing_type=sa.Numeric(10, 6),
+            nullable=False,
+        )
+        batch_op.create_foreign_key(
+            "fk_trust_scores_project",
+            "projects",
+            ["project_id"],
+            ["id"],
+            ondelete="CASCADE",
+        )
 
     # ==========================================================
     # 6. Trust score indexes
@@ -407,48 +452,47 @@ def downgrade() -> None:
     )
 
     # ==========================================================
-    # Remove trust_scores foreign key
+    # Remove trust_scores foreign key and Phase 2 columns
     # ==========================================================
 
-    op.drop_constraint(
-        "fk_trust_scores_project",
-        "trust_scores",
-        type_="foreignkey",
-    )
+    with op.batch_alter_table("trust_scores", schema=None) as batch_op:
+        try:
+            batch_op.drop_constraint(
+                "fk_trust_scores_project",
+                type_="foreignkey",
+            )
+        except Exception:
+            pass
+        batch_op.drop_column("final_score")
+        batch_op.drop_column("embedding_score")
+        batch_op.drop_column("behavioral_score")
+        batch_op.drop_column("agreement_score")
+        batch_op.drop_column("gold_score")
+        batch_op.drop_column("project_id")
 
-    # ==========================================================
-    # Remove Phase 2 trust score columns
-    # ==========================================================
+    with op.batch_alter_table("annotations", schema=None) as batch_op:
+        try:
+            batch_op.drop_constraint("fk_annotations_project", type_="foreignkey")
+        except Exception:
+            pass
+        batch_op.drop_column("updated_at")
+        batch_op.drop_column("created_at")
+        batch_op.drop_column("metadata")
+        batch_op.drop_column("duration_ms")
+        batch_op.drop_column("project_id")
 
-    op.drop_column(
-        "trust_scores",
-        "final_score",
-    )
+    with op.batch_alter_table("items", schema=None) as batch_op:
+        try:
+            batch_op.drop_constraint("fk_items_project", type_="foreignkey")
+        except Exception:
+            pass
+        batch_op.drop_column("gold_label")
+        batch_op.drop_column("is_gold")
+        batch_op.drop_column("external_id")
+        batch_op.drop_column("project_id")
 
-    op.drop_column(
-        "trust_scores",
-        "embedding_score",
-    )
-
-    op.drop_column(
-        "trust_scores",
-        "behavioral_score",
-    )
-
-    op.drop_column(
-        "trust_scores",
-        "agreement_score",
-    )
-
-    op.drop_column(
-        "trust_scores",
-        "gold_score",
-    )
-
-    op.drop_column(
-        "trust_scores",
-        "project_id",
-    )
+    with op.batch_alter_table("annotators", schema=None) as batch_op:
+        batch_op.drop_column("username")
 
     # ==========================================================
     # Remove embedding indexes and table

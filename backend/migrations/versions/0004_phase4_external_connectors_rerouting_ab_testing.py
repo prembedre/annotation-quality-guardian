@@ -98,6 +98,22 @@ def upgrade() -> None:
             nullable=True,
             server_default=sa.func.now(),
         ),
+        sa.Column(
+            "last_sync_at",
+            sa.DateTime(),
+            nullable=True,
+        ),
+        sa.Column(
+            "last_tested_at",
+            sa.DateTime(),
+            nullable=True,
+        ),
+        sa.Column(
+            "synced_rows_count",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("connection_name", name="uq_external_db_connectors_connection_name"),
     )
