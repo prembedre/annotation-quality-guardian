@@ -73,40 +73,36 @@ function getAvatarGradient(name) {
 }
 
 // Interactive SVG Quality Trend Chart
-function QualityTrendChart({ timeRange }) {
+function QualityTrendChart({ timeRange, projectId }) {
   const [activeMetric, setActiveMetric] = useState('both'); // 'both', 'trust', 'kappa'
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Synthetic trend points based on time range
-  const data = useMemo(() => {
-    if (timeRange === '24h') {
-      return [
-        { label: '00:00', trust: 82, kappa: 74 },
-        { label: '04:00', trust: 83, kappa: 75 },
-        { label: '08:00', trust: 80, kappa: 72 },
-        { label: '12:00', trust: 86, kappa: 78 },
-        { label: '16:00', trust: 88, kappa: 81 },
-        { label: '20:00', trust: 87, kappa: 80 },
-        { label: 'Now', trust: 89, kappa: 83 },
-      ];
+  const loadTrend = useCallback(async () => {
+    if (!projectId) {
+      setData([]);
+      setLoading(false);
+      return;
     }
-    if (timeRange === '7d') {
-      return [
-        { label: 'Mon', trust: 78, kappa: 70 },
-        { label: 'Tue', trust: 81, kappa: 73 },
-        { label: 'Wed', trust: 79, kappa: 71 },
-        { label: 'Thu', trust: 84, kappa: 76 },
-        { label: 'Fri', trust: 86, kappa: 80 },
-        { label: 'Sat', trust: 88, kappa: 82 },
-        { label: 'Sun', trust: 90, kappa: 85 },
-      ];
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get('/dashboard/trend', {
+        params: { project_id: projectId, time_range: timeRange },
+      });
+      setData(res.data?.points || []);
+    } catch (err) {
+      console.error('Failed to load quality trend:', err);
+      setError('Unable to load telemetry trend data.');
+    } finally {
+      setLoading(false);
     }
-    return [
-      { label: 'Week 1', trust: 74, kappa: 68 },
-      { label: 'Week 2', trust: 79, kappa: 73 },
-      { label: 'Week 3', trust: 83, kappa: 78 },
-      { label: 'Week 4', trust: 88, kappa: 84 },
-    ];
-  }, [timeRange]);
+  }, [projectId, timeRange]);
+
+  useEffect(() => {
+    loadTrend();
+  }, [loadTrend]);
 
   const width = 680;
   const height = 180;
@@ -114,10 +110,16 @@ function QualityTrendChart({ timeRange }) {
   const paddingY = 24;
 
   const getCoordinates = (points, key) => {
+    if (!points || points.length === 0) return [];
+    if (points.length === 1) {
+      const p = points[0];
+      const y = height - paddingY - ((Math.min(100, Math.max(0, p[key])) - 50) / 50) * (height - paddingY * 2);
+      return [{ x: width / 2, y, val: p[key], label: p.label }];
+    }
     const stepX = (width - paddingX * 2) / (points.length - 1);
     return points.map((p, i) => {
       const x = paddingX + i * stepX;
-      const y = height - paddingY - ((p[key] - 50) / 50) * (height - paddingY * 2);
+      const y = height - paddingY - ((Math.min(100, Math.max(0, p[key])) - 50) / 50) * (height - paddingY * 2);
       return { x, y, val: p[key], label: p.label };
     });
   };
@@ -126,10 +128,12 @@ function QualityTrendChart({ timeRange }) {
   const kappaCoords = getCoordinates(data, 'kappa');
 
   const createPath = (coords) => {
+    if (coords.length === 0) return '';
     return coords.reduce((acc, pt, i) => (i === 0 ? `M ${pt.x},${pt.y}` : `${acc} L ${pt.x},${pt.y}`), '');
   };
 
   const createAreaPath = (coords) => {
+    if (coords.length === 0) return '';
     const linePath = createPath(coords);
     const lastX = coords[coords.length - 1].x;
     const firstX = coords[0].x;
@@ -173,112 +177,122 @@ function QualityTrendChart({ timeRange }) {
         </div>
       </div>
 
-      <div style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
-        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '500px' }}>
-          <defs>
-            <linearGradient id="trustGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0EA5E9" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#0EA5E9" stopOpacity="0.0" />
-            </linearGradient>
-            <linearGradient id="kappaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10B981" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#10B981" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
+      {loading ? (
+        <LoadingState count={3} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={loadTrend} />
+      ) : data.length === 0 ? (
+        <EmptyState
+          title="No Quality Trend Data"
+          description="Compute trust scores or upload multi-annotator datasets to visualize quality and agreement trajectory."
+        />
+      ) : (
+        <div style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
+          <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', minWidth: '500px' }}>
+            <defs>
+              <linearGradient id="trustGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#0EA5E9" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#0EA5E9" stopOpacity="0.0" />
+              </linearGradient>
+              <linearGradient id="kappaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10B981" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#10B981" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
 
-          {/* Grid lines */}
-          {[60, 75, 90].map((level) => {
-            const y = height - paddingY - ((level - 50) / 50) * (height - paddingY * 2);
-            return (
-              <g key={level}>
-                <line
-                  x1={paddingX}
-                  y1={y}
-                  x2={width - paddingX}
-                  y2={y}
-                  stroke="var(--border-subtle)"
-                  strokeDasharray="3 3"
+            {/* Grid lines */}
+            {[60, 75, 90].map((level) => {
+              const y = height - paddingY - ((level - 50) / 50) * (height - paddingY * 2);
+              return (
+                <g key={level}>
+                  <line
+                    x1={paddingX}
+                    y1={y}
+                    x2={width - paddingX}
+                    y2={y}
+                    stroke="var(--border-subtle)"
+                    strokeDasharray="3 3"
+                  />
+                  <text
+                    x={paddingX - 8}
+                    y={y + 3}
+                    fill="var(--text-disabled)"
+                    fontSize="9"
+                    fontFamily="var(--font-mono)"
+                    textAnchor="end"
+                  >
+                    {level}%
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Trust Score Area and Line */}
+            {(activeMetric === 'both' || activeMetric === 'trust') && (
+              <>
+                <path d={createAreaPath(trustCoords)} fill="url(#trustGrad)" />
+                <path
+                  d={createPath(trustCoords)}
+                  fill="none"
+                  stroke="#0EA5E9"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
+                {trustCoords.map((pt, i) => (
+                  <circle key={i} cx={pt.x} cy={pt.y} r="3.5" fill="#FFFFFF" stroke="#0EA5E9" strokeWidth="2" />
+                ))}
+              </>
+            )}
+
+            {/* Kappa Area and Line */}
+            {(activeMetric === 'both' || activeMetric === 'kappa') && (
+              <>
+                <path d={createAreaPath(kappaCoords)} fill="url(#kappaGrad)" />
+                <path
+                  d={createPath(kappaCoords)}
+                  fill="none"
+                  stroke="#10B981"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {kappaCoords.map((pt, i) => (
+                  <circle key={i} cx={pt.x} cy={pt.y} r="3.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="2" />
+                ))}
+              </>
+            )}
+
+            {/* X Axis Labels */}
+            {data.map((item, i) => {
+              const x = data.length > 1 ? paddingX + i * ((width - paddingX * 2) / (data.length - 1)) : width / 2;
+              return (
                 <text
-                  x={paddingX - 8}
-                  y={y + 3}
-                  fill="var(--text-disabled)"
-                  fontSize="9"
+                  key={i}
+                  x={x}
+                  y={height - 6}
+                  fill="var(--text-muted)"
+                  fontSize="10"
                   fontFamily="var(--font-mono)"
-                  textAnchor="end"
+                  textAnchor="middle"
                 >
-                  {level}%
+                  {item.label}
                 </text>
-              </g>
-            );
-          })}
-
-          {/* Trust Score Area and Line */}
-          {(activeMetric === 'both' || activeMetric === 'trust') && (
-            <>
-              <path d={createAreaPath(trustCoords)} fill="url(#trustGrad)" />
-              <path
-                d={createPath(trustCoords)}
-                fill="none"
-                stroke="#0EA5E9"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {trustCoords.map((pt, i) => (
-                <circle key={i} cx={pt.x} cy={pt.y} r="3.5" fill="#FFFFFF" stroke="#0EA5E9" strokeWidth="2" />
-              ))}
-            </>
-          )}
-
-          {/* Kappa Area and Line */}
-          {(activeMetric === 'both' || activeMetric === 'kappa') && (
-            <>
-              <path d={createAreaPath(kappaCoords)} fill="url(#kappaGrad)" />
-              <path
-                d={createPath(kappaCoords)}
-                fill="none"
-                stroke="#10B981"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {kappaCoords.map((pt, i) => (
-                <circle key={i} cx={pt.x} cy={pt.y} r="3.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="2" />
-              ))}
-            </>
-          )}
-
-          {/* X Axis Labels */}
-          {data.map((item, i) => {
-            const x = paddingX + i * ((width - paddingX * 2) / (data.length - 1));
-            return (
-              <text
-                key={i}
-                x={x}
-                y={height - 6}
-                fill="var(--text-muted)"
-                fontSize="10"
-                fontFamily="var(--font-mono)"
-                textAnchor="middle"
-              >
-                {item.label}
-              </text>
-            );
-          })}
-        </svg>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '1.25rem', marginTop: '0.75rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0EA5E9' }} />
-          Mean Trust Score (+4.6% this period)
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10B981' }} />
-          Pairwise Kappa Reliability (Target: &gt; 0.75)
-        </span>
-      </div>
+              );
+            })}
+          </svg>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '1.25rem', marginTop: '0.75rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0EA5E9' }} />
+              Mean Trust Score
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10B981' }} />
+              Pairwise Kappa Reliability
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -680,7 +694,7 @@ export default function Dashboard() {
       </div>
 
       {/* Hero Quality Trend Chart Section */}
-      <QualityTrendChart timeRange={timeRange} />
+      <QualityTrendChart timeRange={timeRange} projectId={projectId} />
 
       {/* Annotator Leaderboard & Real-time Flags Split */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem', marginBottom: '1.5rem' }}>

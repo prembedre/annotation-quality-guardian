@@ -16,6 +16,7 @@ from app.schemas.dashboard import (
 from app.services.dashboard_service import (
     get_annotator_leaderboard,
     get_agreement_heatmap,
+    get_dashboard_trend,
 )
 
 router = APIRouter(
@@ -77,3 +78,26 @@ async def get_heatmap(
             "cells": [],
             "overall_kappa": None,
         }
+
+
+@router.get(
+    "/trend",
+    summary="Get quality and agreement trend telemetry",
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+)
+async def get_trend(
+    project_id: int = Query(1, ge=1, description="Target project ID"),
+    time_range: str = Query("7d", description="Time window: 24h, 7d, or 30d"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve real-time and historical trend analytics for Trust Scores and Cohen's Kappa.
+    """
+    try:
+        return get_dashboard_trend(db=db, project_id=project_id, time_range=time_range)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch trend data: {str(exc)}",
+        )
+
