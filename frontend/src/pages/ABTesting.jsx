@@ -11,6 +11,7 @@ import {
   Split,
   Sparkles,
   BarChart3,
+  Plus,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -18,6 +19,8 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  Modal,
+  useToast,
   useProject,
 } from '../components';
 
@@ -26,9 +29,10 @@ function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function formatNumber(value) {
+function formatDuration(value) {
   if (value === null || value === undefined) return '—';
-  return Number(value).toFixed(2);
+  if (value >= 1000) return `${(value / 1000).toFixed(2)}s`;
+  return `${Math.round(value)}ms`;
 }
 
 // Split Path Illustration SVG
@@ -53,6 +57,16 @@ export default function ABTesting() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { success, error: toastError } = useToast();
+
+  // Create Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [newTestName, setNewTestName] = useState('');
+  const [descA, setDescA] = useState('');
+  const [descB, setDescB] = useState('');
+  const [allocation, setAllocation] = useState('SPLIT_50_50');
+  const [submittingTest, setSubmittingTest] = useState(false);
+  const [promoting, setPromoting] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!projectId) {
@@ -70,8 +84,8 @@ export default function ABTesting() {
       if (experiments.length > 0) {
         try {
           const resultsRes = await api.get(`/ab-testing/experiments/${experiments[0].id}/results`);
-          setData(resultsRes.data);
-        } catch (resErr) {
+          setData({ ...experiments[0], ...resultsRes.data });
+        } catch {
           setData(experiments[0]);
         }
       } else {
@@ -79,6 +93,7 @@ export default function ABTesting() {
       }
     } catch (err) {
       console.error('Failed to load active A/B test:', err);
+      setError(err.response?.data?.detail || 'Failed to load A/B testing experiment.');
       setData(null);
     } finally {
       setLoading(false);
@@ -89,36 +104,51 @@ export default function ABTesting() {
     loadData();
   }, [loadData]);
 
-  // Demo fallback experiment data if active test is null
-  const experiment = data || {
-    id: 1,
-    name: 'Guideline Clarification v2 vs Baseline',
-    status: 'active',
-    winner: 'B',
-    is_significant: true,
-    confidence_level: 96.4,
-    current_samples: 380,
-    target_samples: 500,
-    variant_a: {
-      name: 'Variant A (Legacy Guidelines)',
-      sample_size: 190,
-      gold_accuracy: 0.824,
-      average_confidence: 0.84,
-      average_duration_ms: 2400,
-    },
-    variant_b: {
-      name: 'Variant B (Contrastive Examples)',
-      sample_size: 190,
-      gold_accuracy: 0.908,
-      average_confidence: 0.92,
-      average_duration_ms: 1950,
-    },
+  const handleCreateTest = async (e) => {
+    e.preventDefault();
+    if (!newTestName.trim() || !projectId) return;
+
+    try {
+      setSubmittingTest(true);
+      await api.post('/ab-testing/experiments', {
+        project_id: projectId,
+        experiment_name: newTestName.trim(),
+        schema_version_a: { description: descA.trim() || 'Control guidelines baseline' },
+        schema_version_b: { description: descB.trim() || 'Variant instructions with contrast examples' },
+        annotator_group: { allocation: allocation },
+        assigned_version: allocation,
+        status: 'active',
+      });
+      success(`A/B experiment "${newTestName.trim()}" started successfully!`);
+      setShowModal(false);
+      setNewTestName('');
+      setDescA('');
+      setDescB('');
+      loadData();
+    } catch (err) {
+      console.error('Failed to create experiment:', err);
+      toastError(err.response?.data?.detail || 'Failed to start A/B testing experiment.');
+    } finally {
+      setSubmittingTest(false);
+    }
   };
 
-  const samplePct = Math.min(
-    Math.round((experiment.current_samples / experiment.target_samples) * 100),
-    100
-  );
+  const handlePromoteVariantB = async () => {
+    const expId = data?.experiment_id || data?.id;
+    if (!expId) return;
+
+    try {
+      setPromoting(true);
+      await api.post(`/ab-testing/experiments/${expId}/promote?variant=B`);
+      success('Variant B successfully promoted to production! Schema and guidelines updated.');
+      loadData();
+    } catch (err) {
+      console.error('Failed to promote Variant B:', err);
+      toastError(err.response?.data?.detail || 'Failed to promote Variant B.');
+    } finally {
+      setPromoting(false);
+    }
+  };
 
   if (!projectId) {
     return (
@@ -136,23 +166,132 @@ export default function ABTesting() {
     );
   }
 
+  const expName = data?.experiment_name || data?.name || 'A/B Guideline Trial';
+  const isCompleted = data?.status === 'completed';
+  const variantA = data?.variant_a || {};
+  const variantB = data?.variant_b || {};
+  const samplesA = variantA.total_annotations ?? variantA.sample_size ?? 0;
+  const samplesB = variantB.total_annotations ?? variantB.sample_size ?? 0;
+  const totalSamples = samplesA + samplesB;
+  const accA = variantA.accuracy ?? variantA.gold_accuracy;
+  const accB = variantB.accuracy ?? variantB.gold_accuracy;
+  const diffVal = data?.accuracy_difference != null ? data.accuracy_difference : (accB != null && accA != null ? accB - accA : null);
+  const isWinnerB = data?.recommended_variant === 'B' || (diffVal != null && diffVal > 0);
+
   return (
     <div>
+      {/* Create Experiment Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Start New Guideline A/B Test"
+        subtitle="Split annotators randomly across guideline variants to measure accuracy improvement."
+        maxWidth="540px"
+        footer={
+          <>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => setShowModal(false)}
+              disabled={submittingTest}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={handleCreateTest}
+              disabled={submittingTest || !newTestName.trim()}
+            >
+              {submittingTest ? 'Launching...' : 'Launch Experiment'}
+            </button>
+          </>
+        }
+      >
+        <form onSubmit={handleCreateTest} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+              Experiment Name *
+            </label>
+            <input
+              type="text"
+              className="settings-input"
+              placeholder="e.g. Contrastive Edge-Case Guidelines v2"
+              value={newTestName}
+              onChange={(e) => setNewTestName(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+              Variant A (Control Instructions)
+            </label>
+            <input
+              type="text"
+              className="settings-input"
+              placeholder="Baseline production instructions"
+              value={descA}
+              onChange={(e) => setDescA(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+              Variant B (Treatment Guidelines)
+            </label>
+            <input
+              type="text"
+              className="settings-input"
+              placeholder="Revised instructions with boundary contrast examples"
+              value={descB}
+              onChange={(e) => setDescB(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+              Traffic Allocation
+            </label>
+            <select
+              className="settings-input"
+              value={allocation}
+              onChange={(e) => setAllocation(e.target.value)}
+            >
+              <option value="SPLIT_50_50">50% Variant A / 50% Variant B (Recommended)</option>
+              <option value="A">100% Variant A (Control)</option>
+              <option value="B">100% Variant B (Treatment)</option>
+            </select>
+          </div>
+        </form>
+      </Modal>
+
       {/* Standard Page Header */}
       <PageHeader
         eyebrow="Guideline Optimization & Experimentation"
         title="A/B Guidelines Testing"
         subtitle="Evaluate annotation accuracy improvements when revising labeling instructions and definitions."
         actions={
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={loadData}
-            disabled={loading}
-          >
-            <RefreshCw size={14} className={loading ? 'spin' : ''} />
-            <span>Refresh Experiment</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={loadData}
+              disabled={loading}
+            >
+              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+              <span>Refresh</span>
+            </button>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => setShowModal(true)}
+            >
+              <Plus size={14} />
+              <span>Start New Test</span>
+            </button>
+          </div>
         }
       />
 
@@ -162,15 +301,15 @@ export default function ABTesting() {
         <div className="card">
           <LoadingState count={4} />
         </div>
-      ) : !experiment ? (
+      ) : !data ? (
         <div className="card">
           <EmptyState
             icon={Split}
             eyebrow="Split Experiments"
             title="No Active A/B Testing Experiment"
-            description="Launch a randomized split-guideline trial to measure if new instructions improve agreement."
+            description="Launch a randomized split-guideline trial to measure if new instructions improve annotator agreement."
             actionLabel="Start New Guideline Test"
-            onAction={() => alert('New test modal')}
+            onAction={() => setShowModal(true)}
           >
             <div style={{ margin: '1rem 0' }}>
               <SplitPathGraphic />
@@ -179,8 +318,8 @@ export default function ABTesting() {
         </div>
       ) : (
         <div>
-          {/* Winner Declaration Banner once Significance is Reached */}
-          {experiment.is_significant && (
+          {/* Winner Declaration Banner once Promoted or Recommended */}
+          {isWinnerB && (
             <div
               className="card"
               style={{
@@ -208,10 +347,10 @@ export default function ABTesting() {
                   </div>
                   <div>
                     <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      Variant B Won with Statistical Significance!
+                      {isCompleted ? 'Variant B Promoted to Production!' : 'Variant B Outperformed Baseline!'}
                     </h3>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      Achieved +8.4% Gold Accuracy uplift with {experiment.confidence_level}% statistical confidence (p &lt; 0.05).
+                      {data.recommendation_reason || `Achieved accuracy difference of ${diffVal != null ? (diffVal * 100).toFixed(1) + '%' : 'uplift'} over control.`}
                     </p>
                   </div>
                 </div>
@@ -219,16 +358,19 @@ export default function ABTesting() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                   <span className="badge badge-good font-mono">
                     <CheckCircle2 size={12} />
-                    <span>Statistically Significant</span>
+                    <span>{isCompleted ? 'Promoted & Active' : 'Recommended'}</span>
                   </span>
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    onClick={() => alert('Variant B promoted to production!')}
-                  >
-                    <Sparkles size={13} />
-                    <span>Promote Variant B to Production</span>
-                  </button>
+                  {!isCompleted && (
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      onClick={handlePromoteVariantB}
+                      disabled={promoting}
+                    >
+                      <Sparkles size={13} />
+                      <span>{promoting ? 'Promoting...' : 'Promote Variant B to Production'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -238,33 +380,14 @@ export default function ABTesting() {
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <div>
-                <span className="eyebrow">Experiment Power &amp; Sample Size</span>
+                <span className="eyebrow">{expName}</span>
                 <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {experiment.current_samples} of {experiment.target_samples} target evaluations collected
+                  {totalSamples} total annotations evaluated across variants
                 </div>
               </div>
-              <span className="mono-cell badge badge-info">{samplePct}% Sample Quota</span>
-            </div>
-
-            <div
-              style={{
-                width: '100%',
-                height: '8px',
-                background: 'var(--bg-subtle)',
-                borderRadius: 'var(--radius-full)',
-                overflow: 'hidden',
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              <div
-                style={{
-                  width: `${samplePct}%`,
-                  height: '100%',
-                  background: 'var(--accent-gradient)',
-                  borderRadius: 'var(--radius-full)',
-                  transition: 'width 0.5s ease',
-                }}
-              />
+              <span className="mono-cell badge badge-info">
+                Status: {data.status?.toUpperCase() || 'ACTIVE'}
+              </span>
             </div>
           </div>
 
@@ -275,31 +398,31 @@ export default function ABTesting() {
               <div className="card-header">
                 <div>
                   <span className="eyebrow">Control Baseline</span>
-                  <h2>{experiment.variant_a.name}</h2>
-                  <p>Existing production labeling instructions without contrast examples.</p>
+                  <h2>Variant A (Control)</h2>
+                  <p>{data.schema_version_a?.description || 'Baseline production labeling instructions.'}</p>
                 </div>
-                <span className="mono-cell badge badge-neutral">{experiment.variant_a.sample_size} Samples</span>
+                <span className="mono-cell badge badge-neutral">{samplesA} Samples</span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <div className="eyebrow">Gold Accuracy</div>
                   <div className="mono-cell" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
-                    {formatPercent(experiment.variant_a.gold_accuracy)}
+                    {formatPercent(accA)}
                   </div>
                 </div>
 
                 <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <div className="eyebrow">Confidence</div>
                   <div className="mono-cell" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
-                    {formatPercent(experiment.variant_a.average_confidence)}
+                    {formatPercent(variantA.average_confidence)}
                   </div>
                 </div>
 
                 <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <div className="eyebrow">Avg Duration</div>
                   <div className="mono-cell" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    {experiment.variant_a.average_duration_ms}ms
+                    {formatDuration(variantA.average_duration_ms)}
                   </div>
                 </div>
 
@@ -317,48 +440,54 @@ export default function ABTesting() {
               className="card"
               style={{
                 marginBottom: 0,
-                borderColor: 'var(--status-good-solid)',
-                boxShadow: 'var(--shadow-glow)',
+                borderColor: isWinnerB ? 'var(--status-good-solid)' : 'var(--border-medium)',
+                boxShadow: isWinnerB ? 'var(--shadow-glow)' : 'none',
               }}
             >
               <div className="card-header">
                 <div>
-                  <span className="eyebrow" style={{ color: 'var(--status-good-text)' }}>Recommended Winner</span>
-                  <h2>{experiment.variant_b.name}</h2>
-                  <p>Updated guidelines featuring 5 pairwise contrastive boundary examples.</p>
+                  <span className="eyebrow" style={{ color: isWinnerB ? 'var(--status-good-text)' : 'var(--accent-brand)' }}>
+                    {isWinnerB ? 'Recommended Winner' : 'Treatment Variant'}
+                  </span>
+                  <h2>Variant B (Treatment)</h2>
+                  <p>{data.schema_version_b?.description || 'Modified guidelines with contrastive examples.'}</p>
                 </div>
-                <span className="badge badge-good">
-                  <Trophy size={12} />
-                  <span>WINNER</span>
-                </span>
+                {isWinnerB ? (
+                  <span className="badge badge-good">
+                    <Trophy size={12} />
+                    <span>WINNER</span>
+                  </span>
+                ) : (
+                  <span className="mono-cell badge badge-neutral">{samplesB} Samples</span>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div style={{ background: 'var(--status-good-bg)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--status-good-border)' }}>
-                  <div className="eyebrow" style={{ color: 'var(--status-good-text)' }}>Gold Accuracy</div>
-                  <div className="mono-cell" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--status-good-text)', marginTop: '2px' }}>
-                    {formatPercent(experiment.variant_b.gold_accuracy)}
+                <div style={{ background: isWinnerB ? 'var(--status-good-bg)' : 'var(--bg-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: isWinnerB ? '1px solid var(--status-good-border)' : '1px solid var(--border-subtle)' }}>
+                  <div className="eyebrow" style={{ color: isWinnerB ? 'var(--status-good-text)' : 'inherit' }}>Gold Accuracy</div>
+                  <div className="mono-cell" style={{ fontSize: '1.5rem', fontWeight: 700, color: isWinnerB ? 'var(--status-good-text)' : 'var(--text-primary)', marginTop: '2px' }}>
+                    {formatPercent(accB)}
                   </div>
                 </div>
 
                 <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <div className="eyebrow">Confidence</div>
                   <div className="mono-cell" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
-                    {formatPercent(experiment.variant_b.average_confidence)}
+                    {formatPercent(variantB.average_confidence)}
                   </div>
                 </div>
 
                 <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <div className="eyebrow">Avg Duration</div>
-                  <div className="mono-cell" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--status-good-text)', marginTop: '2px' }}>
-                    {experiment.variant_b.average_duration_ms}ms (-18%)
+                  <div className="mono-cell" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
+                    {formatDuration(variantB.average_duration_ms)}
                   </div>
                 </div>
 
                 <div style={{ background: 'var(--bg-subtle)', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
                   <div className="eyebrow">Accuracy Uplift</div>
-                  <div className="mono-cell" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--status-good-text)', marginTop: '2px' }}>
-                    +8.4%
+                  <div className="mono-cell" style={{ fontSize: '1.2rem', fontWeight: 700, color: diffVal != null && diffVal > 0 ? 'var(--status-good-text)' : 'var(--text-primary)', marginTop: '2px' }}>
+                    {diffVal != null ? `${diffVal > 0 ? '+' : ''}${(diffVal * 100).toFixed(1)}%` : '—'}
                   </div>
                 </div>
               </div>

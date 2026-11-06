@@ -202,3 +202,48 @@ def get_experiment_results(
         "recommended_variant": result.recommended_variant,
         "recommendation_reason": result.recommendation_reason,
     }
+
+
+@router.post(
+    "/experiments/{experiment_id}/promote",
+    response_model=ABTestExperimentResponseSchema,
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER))],
+)
+def promote_experiment_variant(
+    experiment_id: int,
+    variant: str = "B",
+    db: Session = Depends(get_db),
+):
+    """
+    Promote a guideline variant (default Variant B) to production.
+    Concludes the experiment and persists the status as completed.
+    """
+    experiment = (
+        db.query(ABTestExperiment)
+        .filter(ABTestExperiment.id == experiment_id)
+        .first()
+    )
+
+    if experiment is None:
+        raise HTTPException(
+            status_code=404,
+            detail="A/B testing experiment not found",
+        )
+
+    experiment.assigned_version = variant.upper()
+    experiment.status = "completed"
+    experiment.completed_at = datetime.utcnow()
+
+    # If variant B specifies new labels, update project label set
+    variant_schema = (
+        experiment.schema_version_b
+        if variant.upper() == "B"
+        else experiment.schema_version_a
+    )
+    if isinstance(variant_schema, dict) and "labels" in variant_schema:
+        if experiment.project:
+            experiment.project.label_set = list(variant_schema["labels"])
+
+    db.commit()
+    db.refresh(experiment)
+    return experiment
