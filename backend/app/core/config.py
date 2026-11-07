@@ -62,13 +62,17 @@ class Settings(BaseSettings):
     @property
     def resolved_database_url(self) -> str:
         """Return database URL with resolved absolute path for SQLite or serverless fallback."""
-        url = self.DATABASE_URL or ""
+        url = (self.DATABASE_URL or "").strip()
+
+        # Handle legacy postgres:// URLs from Supabase / Neon / Heroku
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
 
         # If deployed on Vercel without a remote managed database
         is_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV") is not None
         if is_vercel:
             # If default unconfigured localhost postgres is present, fallback to /tmp sqlite
-            if "@localhost:5432" in url or "@127.0.0.1:5432" in url or not url.strip():
+            if "@localhost:5432" in url or "@127.0.0.1:5432" in url or not url:
                 return "sqlite:////tmp/aqg_dev.db"
             if url.startswith("sqlite:///"):
                 return "sqlite:////tmp/aqg_dev.db"

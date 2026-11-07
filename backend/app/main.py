@@ -11,6 +11,9 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 if _root_dir not in sys.path:
     sys.path.insert(0, _root_dir)
+_scoring_dir = os.path.join(_backend_dir, "scoring")
+if os.path.exists(_scoring_dir) and _scoring_dir not in sys.path:
+    sys.path.insert(0, _scoring_dir)
 
 from contextlib import asynccontextmanager
 
