@@ -136,7 +136,8 @@ class Settings(BaseSettings):
 
     @property
     def is_testing(self) -> bool:
-        return self.ENV == EnvironmentType.TESTING
+        env_val = str(os.environ.get("ENV") or os.environ.get("ENVIRONMENT") or self.ENV.value).lower()
+        return self.ENV == EnvironmentType.TESTING or "test" in env_val or "pytest" in sys.modules
 
 
 @lru_cache

@@ -42,6 +42,7 @@ jobs:
           DATABASE_URL: sqlite:///./test_ci.db
           JWT_SECRET: test_ci_jwt_secret_key_minimum_32_chars_123456
           ENVIRONMENT: test
+          ENV: testing
 
   frontend:
     name: Frontend Lint, Unit & E2E Tests
