@@ -21,12 +21,19 @@ connect_args = {}
 if db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
-engine = create_engine(
-    db_url,
-    connect_args=connect_args,
-    pool_pre_ping=not db_url.startswith("sqlite"),
-    echo=settings.DEBUG and settings.is_development,
-)
+try:
+    engine = create_engine(
+        db_url,
+        connect_args=connect_args,
+        pool_pre_ping=not db_url.startswith("sqlite"),
+        echo=settings.DEBUG and settings.is_development,
+    )
+except Exception:
+    import os
+    is_serverless = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV") is not None or os.name != "nt"
+    fallback_path = "/tmp/aqg_dev.db" if is_serverless else "aqg_dev.db"
+    fallback_url = f"sqlite:///{fallback_path}"
+    engine = create_engine(fallback_url, connect_args={"check_same_thread": False}, pool_pre_ping=False)
 
 
 # ============================================================

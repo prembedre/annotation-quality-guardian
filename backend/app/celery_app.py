@@ -3,6 +3,7 @@ Celery application configuration and initialization.
 Uses Redis as message broker and result backend.
 """
 
+import os
 from celery import Celery
 from app.core.config import settings
 
