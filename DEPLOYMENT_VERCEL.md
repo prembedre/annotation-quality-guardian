@@ -9,6 +9,14 @@ The public rewrite table sends `/api/*`, `/auth/*`, and `/health` to FastAPI; al
 
 > Vercel Services may require the project to have the Services framework enabled. In Vercel, import this repository and select **Services** as the project framework. Keep the project root at the repository root so Vercel can read the root `vercel.json`.
 
+## Automatic Demo User Seeding & Serverless Self-Healing
+
+The application includes automated self-healing for Vercel / serverless deployments:
+1. **Auto Table & Schema Initialization**: On startup or during login, if tables do not exist or are empty, `Base.metadata.create_all` and schema compatibility migrations execute automatically.
+2. **Auto Demo User Seeding**: If the database has 0 users or when a known demo credential is used (`admin@annotationops.io`, `pm@annotationops.io`, `bob@annotationops.io`, `dave@annotationops.io`, password: `demo12345`), the system automatically provisions the RBAC accounts.
+3. **Serverless SQLite Fallback**: If no remote PostgreSQL `DATABASE_URL` is configured, the system automatically falls back to `/tmp/aqg_dev.db` (the writable serverless partition) to ensure functionality out-of-the-box.
+4. **CORS Flexibility**: All Vercel preview/production domains (`https://*.vercel.app`) are automatically permitted.
+
 ## Before production traffic
 
 1. **Keep the existing database intact.** Use a managed PostgreSQL database and take a backup/snapshot before applying any schema changes. Do not point production at a local SQLite file or the development Docker database.

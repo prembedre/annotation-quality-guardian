@@ -3,7 +3,15 @@
   "services": {
     "frontend": {
       "root": "frontend",
-      "framework": "vite"
+      "framework": "vite",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "backend",
+          "format": "url",
+          "env": "VITE_BACKEND_URL"
+        }
+      ]
     },
     "backend": {
       "root": "backend",
@@ -22,6 +30,14 @@
     },
     {
       "source": "/health",
+      "destination": { "service": "backend" }
+    },
+    {
+      "source": "/docs",
+      "destination": { "service": "backend" }
+    },
+    {
+      "source": "/openapi.json",
       "destination": { "service": "backend" }
     },
     {

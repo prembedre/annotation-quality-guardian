@@ -5,6 +5,17 @@
 const TOKEN_KEY = 'aqg_auth_token';
 
 /**
+ * Returns the configured backend origin (if any), removing trailing slashes.
+ */
+export function getApiOrigin() {
+  const custom = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+  if (custom && custom.trim() !== '') {
+    return custom.replace(/\/+$/, '');
+  }
+  return '';
+}
+
+/**
  * Retrieve the stored JWT from localStorage.
  * @returns {string|null}
  */
@@ -34,7 +45,8 @@ export function removeToken() {
  * @returns {Promise<{access_token: string, user: object}>}
  */
 export async function login(email, password) {
-  const res = await fetch('/auth/login', {
+  const origin = getApiOrigin();
+  const res = await fetch(`${origin}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -65,7 +77,8 @@ export async function fetchMe() {
   const token = getToken();
   if (!token) throw new Error('No auth token found');
 
-  const res = await fetch('/auth/me', {
+  const origin = getApiOrigin();
+  const res = await fetch(`${origin}/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -87,7 +100,8 @@ export async function fetchMe() {
  * @returns {Promise<{access_token: string, user: object}>}
  */
 export async function bootstrap(email, fullName, password) {
-  const res = await fetch('/auth/bootstrap', {
+  const origin = getApiOrigin();
+  const res = await fetch(`${origin}/auth/bootstrap`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, full_name: fullName, password }),

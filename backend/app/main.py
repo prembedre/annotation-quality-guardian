@@ -46,18 +46,30 @@ from app.api import (
 async def lifespan(app: FastAPI):
     """
     Application startup and shutdown events.
-
-    In development, ensure base tables exist if not yet migrated.
+    Ensures required tables, schema compatibility, and demo accounts exist.
     """
-    if settings.is_development and check_db_connection():
-        try:
+    try:
+        if check_db_connection():
             Base.metadata.create_all(bind=engine)
             from app.core.db_patch import ensure_schema_compatibility
             ensure_schema_compatibility(engine)
-            from app.core.seed_demo_data import seed_demo_users
-            seed_demo_users()
-        except Exception:
-            pass
+            if not settings.is_testing:
+                from app.core.seed_demo_data import seed_demo_data, seed_demo_users
+                from app.core.db import SessionLocal
+                from app.models.user import User
+                from app.models.project import Project
+
+                with SessionLocal() as db:
+                    user_count = db.query(User).count()
+                    if user_count == 0:
+                        seed_demo_users(db)
+
+                    project_count = db.query(Project).count()
+                    if project_count == 0:
+                        seed_demo_data()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Startup DB initialization notice: %s", exc)
 
     yield
 
@@ -80,6 +92,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

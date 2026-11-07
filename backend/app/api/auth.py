@@ -125,7 +125,26 @@ def login(
     subsequent requests to protected endpoints.
     """
     normalized_email = payload.email.lower().strip()
-    user = db.query(User).filter(User.email == normalized_email).first()
+    try:
+        user = db.query(User).filter(User.email == normalized_email).first()
+    except Exception:
+        # Table might not exist yet; ensure created and seed
+        from app.core.db import engine, Base
+        from app.core.seed_demo_data import seed_demo_users
+        Base.metadata.create_all(bind=engine)
+        seed_demo_users(db)
+        user = db.query(User).filter(User.email == normalized_email).first()
+
+    # Self-healing: if demo account is used and doesn't exist yet, seed demo accounts
+    if user is None:
+        from app.core.seed_demo_data import DEMO_USERS, seed_demo_users
+        demo_emails = {u["email"].lower() for u in DEMO_USERS}
+        if normalized_email in demo_emails:
+            try:
+                seed_demo_users(db)
+                user = db.query(User).filter(User.email == normalized_email).first()
+            except Exception:
+                pass
 
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

@@ -10,8 +10,9 @@
 import axios from 'axios';
 import { getToken } from './authService';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL
-  ? `${import.meta.env.VITE_API_BASE_URL}/api`
+const customBase = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+const baseURL = customBase && customBase.trim() !== ''
+  ? `${customBase.replace(/\/+$/, '')}/api`
   : '/api';
 
 const api = axios.create({
