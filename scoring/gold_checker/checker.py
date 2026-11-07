@@ -27,7 +27,13 @@ def gold_accuracy(
 
     for ann in annotations:
         item_id = ann["item_id"]
-        if item_id not in gold_items:
+        gold_label = gold_items.get(item_id)
+        if gold_label is None:
+            gold_label = gold_items.get(str(item_id))
+        if gold_label is None and isinstance(item_id, str) and item_id.isdigit():
+            gold_label = gold_items.get(int(item_id))
+
+        if gold_label is None:
             continue
 
         annotator = str(ann["annotator_id"])
@@ -35,7 +41,7 @@ def gold_accuracy(
             annotator_stats[annotator] = {"correct": 0, "total": 0}
 
         annotator_stats[annotator]["total"] += 1
-        if ann["label"] == gold_items[item_id]:
+        if ann["label"] == gold_label:
             annotator_stats[annotator]["correct"] += 1
 
     per_annotator = {}

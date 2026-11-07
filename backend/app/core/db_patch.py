@@ -35,6 +35,18 @@ def ensure_schema_compatibility(engine: Engine) -> None:
                         text("ALTER TABLE projects ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT 0")
                     )
                     conn.commit()
+                if "created_at" not in project_cols:
+                    logger.info("Adding missing 'created_at' column to projects table")
+                    conn.execute(
+                        text("ALTER TABLE projects ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                    )
+                    conn.commit()
+                if "updated_at" not in project_cols:
+                    logger.info("Adding missing 'updated_at' column to projects table")
+                    conn.execute(
+                        text("ALTER TABLE projects ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                    )
+                    conn.commit()
 
             # 2. annotators table
             if "annotators" in table_names:

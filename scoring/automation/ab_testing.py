@@ -79,7 +79,7 @@ def analyze_ab_test(
         if not isinstance(metadata, dict):
             continue
 
-        variant = str(metadata.get(schema_field, "")).strip().upper()
+        variant = str(metadata.get(schema_field) or metadata.get("variant", "")).strip().upper()
 
         if variant in variant_annotations:
             variant_annotations[variant].append(annotation)

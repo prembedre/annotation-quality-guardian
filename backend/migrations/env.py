@@ -28,13 +28,13 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Determine target database URL
-db_url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL
+db_url = os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url")
 config.set_main_option("sqlalchemy.url", db_url)
 
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL
+    url = os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -49,7 +49,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     configuration = config.get_section(config.config_ini_section, {})
-    active_url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL
+    active_url = os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url")
     configuration["sqlalchemy.url"] = active_url
 
     connectable = engine_from_config(

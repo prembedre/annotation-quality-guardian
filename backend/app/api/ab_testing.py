@@ -145,10 +145,11 @@ def get_experiment_results(
         .all()
     )
 
-    gold_lookup: Dict[str, str] = {}
+    gold_lookup: Dict[Any, str] = {}
 
     for item in gold_items:
         gold_lookup[str(item.id)] = item.gold_label
+        gold_lookup[item.id] = item.gold_label
 
         if item.external_id:
             gold_lookup[str(item.external_id)] = item.gold_label
@@ -198,7 +199,11 @@ def get_experiment_results(
             "average_confidence": result.variant_b.average_confidence,
             "average_duration_ms": result.variant_b.average_duration_ms,
         },
-        "accuracy_difference": result.accuracy_difference,
+        "accuracy_difference": (
+            round(result.variant_b.accuracy - result.variant_a.accuracy, 4)
+            if (result.variant_b.accuracy is not None and result.variant_a.accuracy is not None)
+            else result.accuracy_difference
+        ),
         "recommended_variant": result.recommended_variant,
         "recommendation_reason": result.recommendation_reason,
     }

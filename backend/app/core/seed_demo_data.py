@@ -395,6 +395,42 @@ def seed_demo_data():
         seed_demo_users(db)
         print("  * Seeded Demo Users with RBAC roles")
 
+        # 10. Seed sample A/B Testing Experiment
+        from app.models.ab_test_experiment import ABTestExperiment
+        exp_count = db.query(ABTestExperiment).filter(ABTestExperiment.project_id == project.id).count()
+        if exp_count == 0:
+            exp = ABTestExperiment(
+                project_id=project.id,
+                experiment_name="Guideline Clarification Trial: Ambiguity & Edge Cases",
+                schema_version_a={
+                    "description": "Baseline instructions: classify sentiment without explicit boundary edge-case definitions.",
+                    "labels": ["positive", "negative", "neutral"],
+                },
+                schema_version_b={
+                    "description": "Revised guidelines with boundary contrast examples and few-shot disambiguation.",
+                    "labels": ["positive", "negative", "neutral"],
+                },
+                annotator_group={"allocation": "SPLIT_50_50"},
+                assigned_version="SPLIT_50_50",
+                status="active",
+            )
+            db.add(exp)
+            db.commit()
+            db.refresh(exp)
+
+            # Assign Variant B to Annotators 1 & 2 (higher gold agreement) and Variant A to 3 & 4
+            for ann in db.query(Annotation).filter(Annotation.project_id == project.id).all():
+                meta = dict(ann.metadata_ or {})
+                if ann.annotator_id in (1, 2):
+                    meta["schema_version"] = "B"
+                    meta["variant"] = "B"
+                else:
+                    meta["schema_version"] = "A"
+                    meta["variant"] = "A"
+                ann.metadata_ = meta
+            db.commit()
+            print("  * Seeded sample A/B Testing Experiment with variant comparison metrics")
+
         print("[OK] Demo data seeding completed successfully!")
     finally:
         db.close()
