@@ -37,7 +37,14 @@ jobs:
 
       - name: Run Backend Pytest suite
         run: |
-          python -m pytest tests/ -v --tb=short
+          python -m pytest tests/ -v > pytest_output.log 2>&1 || {
+            echo "### Pytest Failures" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 100 pytest_output.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat pytest_output.log
+            exit 1
+          }
         env:
           PYTHONPATH: "backend:scoring:."
           DATABASE_URL: "sqlite:///:memory:"
