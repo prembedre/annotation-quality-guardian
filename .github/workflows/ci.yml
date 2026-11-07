@@ -37,8 +37,9 @@ jobs:
 
       - name: Run Backend Pytest suite
         run: |
-          pytest tests/ -v
+          python -m pytest tests/ -v
         env:
+          PYTHONPATH: backend:scoring:.
           DATABASE_URL: sqlite:///./test_ci.db
           JWT_SECRET: test_ci_jwt_secret_key_minimum_32_chars_123456
           ENVIRONMENT: test
