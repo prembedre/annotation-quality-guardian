@@ -39,11 +39,11 @@ jobs:
         run: |
           python -m pytest tests/ -v --tb=short
         env:
-          PYTHONPATH: backend:scoring:.
-          DATABASE_URL: sqlite:///:memory:
-          JWT_SECRET: test_ci_jwt_secret_key_minimum_32_chars_123456
-          ENVIRONMENT: test
-          ENV: testing
+          PYTHONPATH: "backend:scoring:."
+          DATABASE_URL: "sqlite:///:memory:"
+          JWT_SECRET: "test_ci_jwt_secret_key_minimum_32_chars_123456"
+          ENVIRONMENT: "test"
+          ENV: "testing"
 
   frontend:
     name: Frontend Lint, Unit & E2E Tests
