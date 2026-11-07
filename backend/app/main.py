@@ -52,23 +52,25 @@ async def lifespan(app: FastAPI):
     Ensures required tables, schema compatibility, and demo accounts exist.
     """
     try:
-        if check_db_connection():
-            Base.metadata.create_all(bind=engine)
+        from app.core import db as db_module
+        if db_module.check_db_connection():
+            Base.metadata.create_all(bind=db_module.engine)
             from app.core.db_patch import ensure_schema_compatibility
-            ensure_schema_compatibility(engine)
+            ensure_schema_compatibility(db_module.engine)
             if not settings.is_testing:
                 from app.core.seed_demo_data import seed_demo_data, seed_demo_users
-                from app.core.db import SessionLocal
                 from app.models.user import User
                 from app.models.project import Project
 
-                with SessionLocal() as db:
+                with db_module.SessionLocal() as db:
                     user_count = db.query(User).count()
                     if user_count == 0:
                         seed_demo_users(db)
 
+                    from app.models.ab_test_experiment import ABTestExperiment
                     project_count = db.query(Project).count()
-                    if project_count == 0:
+                    exp_count = db.query(ABTestExperiment).count()
+                    if project_count == 0 or exp_count == 0:
                         seed_demo_data()
     except Exception as exc:
         import logging
@@ -105,10 +107,16 @@ app.add_middleware(
 # ── Include Routers ────────────────────────────────────────────────
 
 app.include_router(health.router)
+app.include_router(health.router, prefix="/api")
 
 app.include_router(
     auth.router,
     prefix="/auth",
+    tags=["Auth"],
+)
+app.include_router(
+    auth.router,
+    prefix="/api/auth",
     tags=["Auth"],
 )
 

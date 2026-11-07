@@ -31,7 +31,7 @@ from app.models.annotation import Annotation
 from app.models.trust_score import TrustScore
 from app.models.reroute_history import RerouteHistory
 from app.models.user import User, UserRole
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.services.trust_score_service import compute_and_save_item_trust_score
 
 DEMO_USERS = [
@@ -93,6 +93,12 @@ def seed_demo_users(db=None):
                     is_active=True,
                 )
                 db.add(user)
+            else:
+                # Ensure existing demo user's password and active status are up-to-date
+                if not verify_password(u_data["password"], existing.hashed_password):
+                    existing.hashed_password = hash_password(u_data["password"])
+                existing.is_active = True
+                existing.role = u_data["role"]
         db.commit()
     finally:
         if close_db:

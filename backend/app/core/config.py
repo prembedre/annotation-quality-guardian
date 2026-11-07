@@ -69,10 +69,15 @@ class Settings(BaseSettings):
             url = url.replace("postgres://", "postgresql://", 1)
 
         # If deployed on Vercel without a remote managed database
-        is_vercel = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV") is not None
+        is_vercel = (
+            os.environ.get("VERCEL") == "1"
+            or os.environ.get("VERCEL_ENV") is not None
+            or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+            or os.environ.get("NOW_REGION") is not None
+        )
         if is_vercel:
             # If default unconfigured localhost postgres is present, fallback to /tmp sqlite
-            if "@localhost:5432" in url or "@127.0.0.1:5432" in url or not url:
+            if "@localhost" in url or "@127.0.0.1" in url or not url or "localhost:5432" in url:
                 return "sqlite:////tmp/aqg_dev.db"
             if url.startswith("sqlite:///"):
                 return "sqlite:////tmp/aqg_dev.db"

@@ -72,14 +72,41 @@ def get_db() -> Generator[Session, None, None]:
 
 def check_db_connection() -> bool:
     """
-    Verify PostgreSQL database connectivity.
+    Verify database connectivity. If primary DB is unreachable, seamlessly fall back to SQLite.
     """
+    global engine, SessionLocal
 
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-
         return True
-
-    except Exception:
+    except Exception as exc:
+        if not str(engine.url).startswith("sqlite"):
+            import logging, os
+            logging.getLogger(__name__).warning(
+                "Primary database connection failed (%s): %s. Falling back to local SQLite engine.",
+                engine.url,
+                exc,
+            )
+            is_serverless = (
+                os.environ.get("VERCEL") == "1"
+                or os.environ.get("VERCEL_ENV") is not None
+                or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+                or os.name != "nt"
+            )
+            sqlite_path = "/tmp/aqg_dev.db" if is_serverless else "aqg_dev.db"
+            fallback_url = f"sqlite:///{sqlite_path}"
+            engine = create_engine(
+                fallback_url,
+                connect_args={"check_same_thread": False},
+                pool_pre_ping=False,
+            )
+            SessionLocal.configure(bind=engine)
+            try:
+                with engine.connect() as connection:
+                    connection.execute(text("SELECT 1"))
+                return True
+            except Exception as inner_exc:
+                logging.getLogger(__name__).error("SQLite fallback failed: %s", inner_exc)
+                return False
         return False
