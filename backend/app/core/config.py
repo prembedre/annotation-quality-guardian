@@ -62,26 +62,43 @@ class Settings(BaseSettings):
 
     @property
     def resolved_database_url(self) -> str:
-        """Return database URL with resolved absolute path for SQLite or serverless fallback."""
+        """
+        Return database URL with resolved absolute path for SQLite or validate production PostgreSQL.
+        In production, requires a persistent remote PostgreSQL URL and never silently falls back to ephemeral SQLite.
+        """
         url = (self.DATABASE_URL or "").strip()
 
         # Handle legacy postgres:// URLs from Supabase / Neon / Heroku
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
 
-        # If deployed on Vercel without a remote managed database
-        is_vercel = (
-            os.environ.get("VERCEL") == "1"
-            or os.environ.get("VERCEL_ENV") is not None
-            or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
-            or os.environ.get("NOW_REGION") is not None
+        is_serverless_prod = (
+            (
+                os.environ.get("VERCEL") == "1"
+                or os.environ.get("VERCEL_ENV") is not None
+                or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+                or os.environ.get("NOW_REGION") is not None
+            )
+            and (self.ENV == EnvironmentType.PRODUCTION or os.environ.get("VERCEL_ENV") == "production")
         )
-        if is_vercel:
-            # If default unconfigured localhost postgres is present, fallback to /tmp sqlite
-            if "@localhost" in url or "@127.0.0.1" in url or not url or "localhost:5432" in url:
-                return "sqlite:////tmp/aqg_dev.db"
-            if url.startswith("sqlite:///"):
-                return "sqlite:////tmp/aqg_dev.db"
+        is_strict_prod = self.is_production or is_serverless_prod
+
+        if is_strict_prod:
+            if (
+                not url
+                or url.startswith("sqlite")
+                or "@localhost" in url
+                or "@127.0.0.1" in url
+                or "localhost:5432" in url
+            ):
+                import logging
+                logging.getLogger(__name__).error(
+                    "DATABASE CONFIGURATION ERROR: Production environment requires a persistent hosted PostgreSQL DATABASE_URL. "
+                    "Ephemeral SQLite (/tmp/aqg_dev.db) is disabled in production to protect data integrity. "
+                    "Please set a valid DATABASE_URL (postgresql://...) in your Vercel project environment variables."
+                )
+                return url
+            return url
 
         if url.startswith("sqlite:///"):
             path_part = url[len("sqlite:///"):]

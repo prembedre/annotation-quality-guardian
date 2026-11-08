@@ -158,7 +158,7 @@ def generate_ambiguity_recommendations(
 
 
 @router.get("/classes",
-    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER, UserRole.ANNOTATOR))],
 )
 def get_ambiguous_classes(
     project_id: int = Query(1, ge=1),

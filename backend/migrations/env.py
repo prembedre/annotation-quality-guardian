@@ -27,14 +27,20 @@ if config.config_file_name is not None:
 # Set target metadata for 'autogenerate' support
 target_metadata = Base.metadata
 
+def _clean_url(u: str) -> str:
+    if u and u.startswith("postgres://"):
+        return u.replace("postgres://", "postgresql://", 1)
+    return u or ""
+
 # Determine target database URL
-db_url = os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url")
+raw_url = os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url")
+db_url = _clean_url(raw_url)
 config.set_main_option("sqlalchemy.url", db_url)
 
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url")
+    url = _clean_url(os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url"))
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -49,7 +55,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     configuration = config.get_section(config.config_ini_section, {})
-    active_url = os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url")
+    active_url = _clean_url(os.environ.get("DATABASE_URL") or settings.resolved_database_url or config.get_main_option("sqlalchemy.url"))
     configuration["sqlalchemy.url"] = active_url
 
     connectable = engine_from_config(

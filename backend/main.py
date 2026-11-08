@@ -17,3 +17,4 @@ if os.path.exists(_scoring_dir) and _scoring_dir not in sys.path:
 from app.main import app
 
 __all__ = ["app"]
+

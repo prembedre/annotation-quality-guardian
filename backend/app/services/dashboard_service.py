@@ -205,7 +205,7 @@ def get_agreement_heatmap(
     # Call overall project kappa
     try:
         kappa_res = compute_fleiss_kappa(db=db, project_id=project_id)
-        overall_kappa = kappa_res.get("fleiss_kappa")
+        overall_kappa = kappa_res.get("fleiss_kappa") if kappa_res.get("fleiss_kappa") is not None else kappa_res.get("kappa")
     except Exception:
         overall_kappa = None
 

@@ -1,62 +1,87 @@
-# Vercel deployment guide
+# Vercel Deployment & Hosted Database Guide
 
-This repository is configured as one Vercel project with two independently built services:
+This repository is configured as a multi-service Vercel deployment:
 
-- **frontend** — React + Vite from `frontend/`
-- **backend** — FastAPI from `backend/`, entered at `app.main:app`
+- **frontend** — React + Vite SPA from `frontend/`
+- **backend** — FastAPI backend from `backend/`, entrypoint `main:app`
 
-The public rewrite table sends `/api/*`, `/auth/*`, and `/health` to FastAPI; all other paths go to the frontend SPA. The frontend already calls same-origin `/api` and `/auth` paths, so a service binding is not needed for browser-to-API requests. Do not change these calls to a deployment-specific hostname.
+The public rewrite table in `vercel.json` routes `/api/*`, `/auth/*`, and `/health` to FastAPI; all SPA routes are routed to Vite.
 
-> Vercel Services may require the project to have the Services framework enabled. In Vercel, import this repository and select **Services** as the project framework. Keep the project root at the repository root so Vercel can read the root `vercel.json`.
+---
 
-## Automatic Demo User Seeding & Serverless Self-Healing
+## 1. Production Database Architecture
 
-The application includes automated self-healing for Vercel / serverless deployments:
-1. **Auto Table & Schema Initialization**: On startup or during login, if tables do not exist or are empty, `Base.metadata.create_all` and schema compatibility migrations execute automatically.
-2. **Auto Demo User Seeding**: If the database has 0 users or when a known demo credential is used (`admin@annotationops.io`, `pm@annotationops.io`, `bob@annotationops.io`, `dave@annotationops.io`, password: `demo12345`), the system automatically provisions the RBAC accounts.
-3. **Serverless SQLite Fallback**: If no remote PostgreSQL `DATABASE_URL` is configured, the system automatically falls back to `/tmp/aqg_dev.db` (the writable serverless partition) to ensure functionality out-of-the-box.
-4. **CORS Flexibility**: All Vercel preview/production domains (`https://*.vercel.app`) are automatically permitted.
+Production deployments **must** use a persistent hosted PostgreSQL database (such as **Neon**, **Supabase**, or **AWS RDS**).
 
-## Before production traffic
+> **Critical Note on Ephemeral SQLite**:
+> Serverless platforms like Vercel instantiate ephemeral Lambda environments where `/tmp` is wiped between cold starts and instances do not share local filesystem state. SQLite fallback is disabled in production to protect data integrity and avoid silent data loss.
 
-1. **Keep the existing database intact.** Use a managed PostgreSQL database and take a backup/snapshot before applying any schema changes. Do not point production at a local SQLite file or the development Docker database.
-2. **Set backend environment variables** for Production (and separately for Preview if you intend to test there):
-   - `ENV=production`
-   - `DEBUG=false`
-   - `SECRET_KEY` — a long, unique, randomly generated secret; never commit it
-   - `DATABASE_URL` — managed PostgreSQL connection string, including SSL options required by the provider
-   - `REDIS_URL` — managed Redis URL reachable from the backend
-   - `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` — set to the worker's shared Redis/broker endpoints if different from `REDIS_URL`
-   - `CORS_ORIGINS` — the exact public frontend origin(s), comma-separated; do not use `*` for authenticated production traffic
-3. Use a provider-supported connection pool or conservative database connection limits. Serverless instances can scale horizontally, so avoid assuming a single long-lived process.
-4. Apply the project's reviewed database migrations using the migration workflow your team normally uses. **Do not rely on application startup to create or migrate production tables.** Verify the migration against a backup/staging copy first.
-5. Deploy a Preview and verify the checks below before promoting it to production.
+---
 
-## Background jobs: separate runtime required
+## 2. Setting Up Hosted PostgreSQL (Neon / Supabase)
 
-The API submits jobs through Celery (`task.delay()`) and reads their results from the Celery backend. Vercel request handlers do not run a persistent Celery worker. Run the existing worker command on a separate persistent worker host using the same code version, PostgreSQL database, and Redis/broker configuration:
+### Option A: Neon Serverless PostgreSQL (Recommended)
+1. Go to [https://neon.tech](https://neon.tech) and create a free project named `aqg-production`.
+2. Neon provides a pooled connection URI formatted as:
+   ```text
+   postgresql://<user>:<password>@ep-<project-name>-pooler.<region>.aws.neon.tech/neondb?sslmode=require
+   ```
+3. Copy the connection string.
 
-```sh
-celery -A app.celery_app.celery_app worker -l info
+### Option B: Supabase Managed PostgreSQL
+1. Go to [https://supabase.com](https://supabase.com) and create a project.
+2. In Project Settings -> Database -> Connection string, select **URI** (or Transaction Pooler on port 6543):
+   ```text
+   postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require
+   ```
+3. If Supabase provides a string starting with `postgres://`, AQG automatically normalizes it to `postgresql://`.
+
+---
+
+## 3. Configuring Vercel Environment Variables
+
+In your Vercel Dashboard -> Project Settings -> **Environment Variables**, set:
+
+| Variable | Value | Notes |
+|---|---|---|
+| `ENV` | `production` | Enables production safeguards |
+| `DEBUG` | `false` | Disables debug logs and API docs |
+| `SECRET_KEY` | *(generate via `python -c "import secrets; print(secrets.token_urlsafe(32))"`)* | Never commit secrets to Git |
+| `DATABASE_URL` | `postgresql://...` | Hosted PostgreSQL URI with `sslmode=require` |
+| `CORS_ORIGINS` | `https://annotation-quality-guardian-jfrfhejmc-aqg1.vercel.app` | Comma-separated allowed origins |
+
+---
+
+## 4. Migrating Local Data (SQLite to Hosted PostgreSQL)
+
+To push existing localhost data (Project 1, 4 annotators, items, 40 annotations, trust scores, users, and rules) from `aqg_dev.db` into the hosted PostgreSQL database, run:
+
+```bash
+# Direct command with your remote DATABASE_URL:
+python scripts/migrate_sqlite_to_postgres.py --sqlite-path aqg_dev.db --postgres-url "postgresql://<user>:<password>@<host>/<dbname>?sslmode=require"
 ```
 
-The worker needs the backend's Python dependencies and import path (the repository's `backend/` working directory). Configure `DATABASE_URL`, `REDIS_URL`, `CELERY_BROKER_URL`, and `CELERY_RESULT_BACKEND` consistently on the worker and API. Do not assume asynchronous job endpoints work until a worker is running and tested. Do not set eager mode as a substitute without testing job status/result persistence.
+Or set the environment variable:
+```bash
+export DATABASE_URL="postgresql://<user>:<password>@<host>/<dbname>?sslmode=require"
+python scripts/migrate_sqlite_to_postgres.py
+```
 
-## Smoke-test checklist
+### Dry Run Validation
+To preview table records without committing writes:
+```bash
+python scripts/migrate_sqlite_to_postgres.py --dry-run --postgres-url "postgresql://..."
+```
 
-- [ ] `/` serves the frontend and client-side routes load on refresh.
-- [ ] `/health` returns HTTP 200 and reports the database as connected.
-- [ ] A known `/api/...` endpoint reaches FastAPI (not the SPA fallback).
-- [ ] Login and an authenticated API request work over HTTPS.
-- [ ] CORS allows only the expected frontend origin(s).
-- [ ] A background job can be queued, processed by the external worker, and queried for its final result.
-- [ ] Database writes persist across new requests and a backup/restore procedure is documented.
-- [ ] Production secrets are stored in Vercel/provider environment settings, not in Git.
+---
 
-## Rollback and data safety
+## 5. Deployment Smoke-Test Checklist
 
-A Vercel deployment rollback restores application code/routing, **not** database contents or schema. Back up the database before migrations, prefer backward-compatible migrations, and retain the previous working deployment. Never run destructive data/schema changes as part of an unverified deployment.
-
-## Known limitation
-
-This configuration prepares the repository for Vercel's multi-service build; it does not itself create provider accounts, provision PostgreSQL/Redis, start the external Celery worker, set secrets, or verify a live deployment. Heavy scientific Python dependencies may also hit runtime/build limits; verify a real Preview build and function startup before sending production traffic.
+- [ ] `/health` returns HTTP 200 with `"database": "connected"` and `"database_type": "postgresql"`.
+- [ ] `/auth/login` successfully issues a JWT token.
+- [ ] `/api/projects` returns `[{"id": 1, "name": "Project 1", ...}]`.
+- [ ] Active project restores in sidebar and topbar (`Project 1 • Default`).
+- [ ] Annotator Leaderboard displays 4 active annotators (Prem, Rahul, Sidharth, Venkatesh).
+- [ ] Peak Trust Score displays `96.4%`.
+- [ ] Quality & Agreement Trend displays historical telemetry.
+- [ ] Data persists across browser refresh and subsequent serverless cold starts.

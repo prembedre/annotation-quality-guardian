@@ -29,7 +29,7 @@ router = APIRouter(
     "/leaderboard",
     response_model=DashboardLeaderboardResponse,
     summary="Get annotator quality and volume leaderboard",
-    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER, UserRole.ANNOTATOR))],
 )
 async def get_leaderboard(
     project_id: Optional[int] = Query(
@@ -55,7 +55,7 @@ async def get_leaderboard(
     "/agreement-heatmap",
     response_model=DashboardAgreementHeatmapResponse,
     summary="Get inter-annotator agreement heatmap matrix",
-    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER, UserRole.ANNOTATOR))],
 )
 async def get_heatmap(
     project_id: int = Query(
@@ -83,7 +83,7 @@ async def get_heatmap(
 @router.get(
     "/trend",
     summary="Get quality and agreement trend telemetry",
-    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER))],
+    dependencies=[Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER, UserRole.ANNOTATOR))],
 )
 async def get_trend(
     project_id: int = Query(1, ge=1, description="Target project ID"),

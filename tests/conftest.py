@@ -16,3 +16,4 @@ for d in [_root_dir, _backend_dir, _scoring_dir]:
 
 os.environ["ENV"] = "testing"
 os.environ["ENVIRONMENT"] = "testing"
+
