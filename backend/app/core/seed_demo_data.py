@@ -336,6 +336,22 @@ def seed_demo_data():
 
         print("  * Computed and saved Trust Scores")
 
+        # Ensure review queue demo flagged items (item-003 and item-007) are flagged for arbitration
+        for ext_id in ("item-003", "item-007"):
+            if ext_id in items:
+                it = items[ext_id]
+                ts = db.query(TrustScore).filter(TrustScore.item_id == it.id).first()
+                if ts:
+                    ts.flagged = True
+                    bd = dict(ts.breakdown or {})
+                    bd["flag_reason"] = (
+                        "Annotator disagreement requires arbitration"
+                        if ext_id == "item-007"
+                        else "Gold standard verification mismatch"
+                    )
+                    ts.breakdown = bd
+        db.commit()
+
         # 7. Seed one pending reroute history item for Automation Dashboard
         pending_reroute = (
             db.query(RerouteHistory)

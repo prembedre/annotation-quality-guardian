@@ -74,13 +74,11 @@ export default function ReviewQueue() {
   );
 
   useEffect(() => {
-    fetchQueue(1, pageSize, statusFilter, search, riskFilter);
-  }, []);
-
-  useEffect(() => {
-    setPage(1);
-    fetchQueue(1, pageSize, statusFilter, search, riskFilter);
-  }, [statusFilter, search, riskFilter]);
+    if (currentProjectId) {
+      setPage(1);
+      fetchQueue(1, pageSize, statusFilter, search, riskFilter);
+    }
+  }, [currentProjectId, statusFilter, search, riskFilter]);
 
   const handlePageSizeChange = useCallback(
     (newPageSize) => {
@@ -94,6 +92,7 @@ export default function ReviewQueue() {
   const handlePageChange = useCallback(
     (newPage) => {
       const safePage = Math.min(Math.max(1, newPage), totalPages);
+      setPage(safePage);
       fetchQueue(safePage, pageSize, statusFilter, search, riskFilter);
     },
     [pageSize, statusFilter, search, riskFilter, totalPages, fetchQueue]

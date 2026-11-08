@@ -57,6 +57,13 @@ def _create_database_engine():
         engine_kwargs["max_overflow"] = 10
         engine_kwargs["pool_recycle"] = 300
 
+        # Proactively check driver availability: if psycopg3 is not installed, prefer psycopg2
+        if db_url.startswith("postgresql://") and "+psycopg" not in db_url:
+            try:
+                import psycopg  # noqa: F401
+            except ImportError:
+                db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
     try:
         return create_engine(db_url, connect_args=connect_args, **engine_kwargs)
     except Exception as exc:

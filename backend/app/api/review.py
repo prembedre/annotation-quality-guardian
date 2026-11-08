@@ -3,12 +3,15 @@ API routes for flagged-item review queue and human resolution.
 """
 
 import math
+import logging
 from collections import Counter
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import or_, func, distinct
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.core.auth_deps import require_role
 from app.core.db import get_db
@@ -85,6 +88,27 @@ async def get_review_queue(
     based on trust scores and anomaly flags.
     """
 
+    # Normalize parameters if invoked directly outside FastAPI parameter injection
+    from fastapi.params import Param
+    if isinstance(project_id, Param):
+        project_id = None
+    if isinstance(flagged, Param):
+        flagged = None
+    if isinstance(min_score, Param):
+        min_score = None
+    if isinstance(max_score, Param):
+        max_score = None
+    if isinstance(quality_tier, Param) or not isinstance(quality_tier, str):
+        quality_tier = None
+    if isinstance(annotator_id, Param):
+        annotator_id = None
+    if isinstance(search, Param) or not isinstance(search, str):
+        search = None
+    if isinstance(page, Param) or not isinstance(page, int) or page < 1:
+        page = 1
+    if isinstance(page_size, Param) or not isinstance(page_size, int) or page_size < 1:
+        page_size = 20
+
     try:
         query = db.query(Item).outerjoin(
             TrustScore,
@@ -157,10 +181,10 @@ async def get_review_queue(
             )
 
         # ---------------------------------------------------------
-        # Pagination
+        # Pagination & PostgreSQL-safe JSON DISTINCT query
         # ---------------------------------------------------------
 
-        total = query.distinct().count()
+        total = query.with_entities(func.count(distinct(Item.id))).scalar() or 0
 
         if total == 0:
             return ReviewQueueResponse(
@@ -179,13 +203,22 @@ async def get_review_queue(
 
         offset = (page - 1) * page_size
 
-        items = (
-            query
+        item_id_query = (
+            query.with_entities(Item.id)
+            .distinct()
             .order_by(Item.id.desc())
             .offset(offset)
             .limit(page_size)
-            .all()
         )
+        item_ids = [r[0] for r in item_id_query.all()]
+
+        items: List[Item] = []
+        if item_ids:
+            items_by_id = {
+                it.id: it
+                for it in db.query(Item).filter(Item.id.in_(item_ids)).all()
+            }
+            items = [items_by_id[iid] for iid in item_ids if iid in items_by_id]
 
         # ---------------------------------------------------------
         # Annotator lookup
@@ -296,7 +329,8 @@ async def get_review_queue(
             total=total,
             total_pages=total_pages,
         )
-    except Exception:
+    except Exception as exc:
+        logger.error("Failed to retrieve review queue: %s", exc, exc_info=True)
         return ReviewQueueResponse(
             items=[],
             page=page,
