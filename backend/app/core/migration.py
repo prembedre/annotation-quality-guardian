@@ -109,7 +109,8 @@ def migrate_data(sqlite_path: str, postgres_url: str, dry_run: bool = False) -> 
     logger.info("Source SQLite:     %s (%d bytes)", sqlite_path, os.path.getsize(sqlite_path))
     logger.info("Target DB:         %s", mask_url(postgres_url))
 
-    src_engine = create_engine(f"sqlite:///{sqlite_path.replace('\\', '/')}", connect_args={"check_same_thread": False})
+    clean_sqlite_path = sqlite_path.replace("\\", "/")
+    src_engine = create_engine(f"sqlite:///{clean_sqlite_path}", connect_args={"check_same_thread": False})
     tgt_engine = create_engine(postgres_url, pool_pre_ping=is_postgres)
 
     # 1. Test connectivity
