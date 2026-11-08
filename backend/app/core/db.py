@@ -60,6 +60,14 @@ def _create_database_engine():
     try:
         return create_engine(db_url, connect_args=connect_args, **engine_kwargs)
     except Exception as exc:
+        if db_url.startswith("postgresql://"):
+            try:
+                alt_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+                logger.info("Retrying database engine with postgresql+psycopg2 driver: %s", exc)
+                return create_engine(alt_url, connect_args=connect_args, **engine_kwargs)
+            except Exception as alt_exc:
+                logger.warning("Alternative driver retry notice: %s", alt_exc)
+
         if is_prod:
             logger.error("Failed to create PostgreSQL engine for production: %s", exc)
             raise
