@@ -33,7 +33,7 @@ async def list_scores(
         description="Filter by annotator ID",
     ),
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER)),
+    _: User = Depends(require_role(UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.REVIEWER, UserRole.ANNOTATOR)),
 ):
     """
     Retrieve computed quality scores (TrustScore records) from the database.

@@ -14,8 +14,14 @@ def ensure_schema_compatibility(engine: Engine) -> None:
     """
     Ensure all required columns and default columns exist in tables.
     Preserves existing data and avoids table drops.
+    Supports both SQLite and PostgreSQL dialects safely.
     """
     try:
+        is_postgres = engine.dialect.name == "postgresql"
+        bool_default = "FALSE" if is_postgres else "0"
+        timestamp_type = "TIMESTAMP" if is_postgres else "DATETIME"
+        timestamp_default = "CURRENT_TIMESTAMP"
+
         with engine.connect() as conn:
             inspector = inspect(engine)
             table_names = set(inspector.get_table_names())
@@ -26,25 +32,25 @@ def ensure_schema_compatibility(engine: Engine) -> None:
                 if "automation_enabled" not in project_cols:
                     logger.info("Adding missing 'automation_enabled' column to projects table")
                     conn.execute(
-                        text("ALTER TABLE projects ADD COLUMN automation_enabled BOOLEAN NOT NULL DEFAULT 0")
+                        text(f"ALTER TABLE projects ADD COLUMN automation_enabled BOOLEAN NOT NULL DEFAULT {bool_default}")
                     )
                     conn.commit()
                 if "is_archived" not in project_cols:
                     logger.info("Adding missing 'is_archived' column to projects table")
                     conn.execute(
-                        text("ALTER TABLE projects ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT 0")
+                        text(f"ALTER TABLE projects ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT {bool_default}")
                     )
                     conn.commit()
                 if "created_at" not in project_cols:
                     logger.info("Adding missing 'created_at' column to projects table")
                     conn.execute(
-                        text("ALTER TABLE projects ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                        text(f"ALTER TABLE projects ADD COLUMN created_at {timestamp_type} DEFAULT {timestamp_default}")
                     )
                     conn.commit()
                 if "updated_at" not in project_cols:
                     logger.info("Adding missing 'updated_at' column to projects table")
                     conn.execute(
-                        text("ALTER TABLE projects ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                        text(f"ALTER TABLE projects ADD COLUMN updated_at {timestamp_type} DEFAULT {timestamp_default}")
                     )
                     conn.commit()
 
@@ -112,8 +118,8 @@ def ensure_schema_compatibility(engine: Engine) -> None:
             if "external_db_connectors" in table_names:
                 ec_cols = {col["name"] for col in inspector.get_columns("external_db_connectors")}
                 ec_patches = [
-                    ("last_sync_at", "DATETIME"),
-                    ("last_tested_at", "DATETIME"),
+                    ("last_sync_at", timestamp_type),
+                    ("last_tested_at", timestamp_type),
                     ("synced_rows_count", "INTEGER NOT NULL DEFAULT 0"),
                 ]
                 for col_name, col_type in ec_patches:

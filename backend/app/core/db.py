@@ -1,8 +1,10 @@
 """
 Database session and engine management with SQLAlchemy.
-PostgreSQL is used as the project database.
+Supports hosted PostgreSQL for production and SQLite for local development.
 """
 
+import os
+import logging
 from typing import Generator
 
 from sqlalchemy import create_engine, text
@@ -10,30 +12,63 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 
 # ============================================================
-# SQLAlchemy Engine
+# Declarative Base
 # ============================================================
 
-db_url = settings.resolved_database_url
+Base = declarative_base()
 
-connect_args = {}
-if db_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
 
-try:
-    engine = create_engine(
-        db_url,
-        connect_args=connect_args,
-        pool_pre_ping=not db_url.startswith("sqlite"),
-        echo=settings.DEBUG and settings.is_development,
+# ============================================================
+# SQLAlchemy Engine Creation
+# ============================================================
+
+def _create_database_engine():
+    db_url = settings.resolved_database_url
+    is_serverless_prod = (
+        (
+            os.environ.get("VERCEL") == "1"
+            or os.environ.get("VERCEL_ENV") is not None
+            or os.environ.get("NOW_REGION") is not None
+        )
+        and (settings.ENV.value == "production" or os.environ.get("VERCEL_ENV") == "production")
     )
-except Exception:
-    import os
-    is_serverless = os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_ENV") is not None or os.name != "nt"
-    fallback_path = "/tmp/aqg_dev.db" if is_serverless else "aqg_dev.db"
-    fallback_url = f"sqlite:///{fallback_path}"
-    engine = create_engine(fallback_url, connect_args={"check_same_thread": False}, pool_pre_ping=False)
+    is_prod = settings.is_production or is_serverless_prod
+
+    connect_args = {}
+    engine_kwargs = {
+        "echo": settings.DEBUG and settings.is_development,
+    }
+
+    if db_url.startswith("sqlite"):
+        if is_prod:
+            logger.error(
+                "CRITICAL: SQLite is not permitted in production serverless environments. "
+                "Configure a hosted PostgreSQL DATABASE_URL in Vercel."
+            )
+        connect_args["check_same_thread"] = False
+        engine_kwargs["pool_pre_ping"] = False
+    else:
+        # PostgreSQL Production Configuration
+        engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_size"] = 5
+        engine_kwargs["max_overflow"] = 10
+        engine_kwargs["pool_recycle"] = 300
+
+    try:
+        return create_engine(db_url, connect_args=connect_args, **engine_kwargs)
+    except Exception as exc:
+        if is_prod:
+            logger.error("Failed to create PostgreSQL engine for production: %s", exc)
+            raise
+
+        logger.warning("Database engine creation failed (%s). Falling back to local development SQLite.", exc)
+        return create_engine("sqlite:///aqg_dev.db", connect_args={"check_same_thread": False}, pool_pre_ping=False)
+
+
+engine = _create_database_engine()
 
 
 # ============================================================
@@ -48,25 +83,15 @@ SessionLocal = sessionmaker(
 
 
 # ============================================================
-# Declarative Base
-# ============================================================
-
-Base = declarative_base()
-
-
-# ============================================================
 # FastAPI Database Dependency
 # ============================================================
 
 def get_db() -> Generator[Session, None, None]:
     """
     Provide a database session for FastAPI requests.
-
     The session is automatically closed after the request.
     """
-
     db = SessionLocal()
-
     try:
         yield db
     finally:
@@ -79,7 +104,9 @@ def get_db() -> Generator[Session, None, None]:
 
 def check_db_connection() -> bool:
     """
-    Verify database connectivity. If primary DB is unreachable, seamlessly fall back to SQLite.
+    Verify database connectivity.
+    In production, fails clearly without silently creating an ephemeral SQLite file.
+    In local development, may fall back to local dev SQLite.
     """
     global engine, SessionLocal
 
@@ -88,32 +115,38 @@ def check_db_connection() -> bool:
             connection.execute(text("SELECT 1"))
         return True
     except Exception as exc:
-        if not str(engine.url).startswith("sqlite"):
-            import logging, os
-            logging.getLogger(__name__).warning(
-                "Primary database connection failed (%s): %s. Falling back to local SQLite engine.",
-                engine.url,
-                exc,
-            )
-            is_serverless = (
+        is_serverless_prod = (
+            (
                 os.environ.get("VERCEL") == "1"
                 or os.environ.get("VERCEL_ENV") is not None
-                or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
-                or os.name != "nt"
+                or os.environ.get("NOW_REGION") is not None
             )
-            sqlite_path = "/tmp/aqg_dev.db" if is_serverless else "aqg_dev.db"
-            fallback_url = f"sqlite:///{sqlite_path}"
-            engine = create_engine(
-                fallback_url,
-                connect_args={"check_same_thread": False},
-                pool_pre_ping=False,
-            )
-            SessionLocal.configure(bind=engine)
+            and (settings.ENV.value == "production" or os.environ.get("VERCEL_ENV") == "production")
+        )
+        is_prod = settings.is_production or is_serverless_prod
+
+        try:
+            safe_url = engine.url.render_as_string(hide_password=True)
+        except Exception:
+            safe_url = "configured database"
+        logger.error("Database connection check failed for [%s]: %s", safe_url, exc)
+
+        if is_prod:
+            # Never silently switch to SQLite in production
+            return False
+
+        # In local development only, attempt fallback to local dev SQLite
+        if not str(engine.url).startswith("sqlite"):
             try:
+                fallback_url = "sqlite:///aqg_dev.db"
+                engine = create_engine(fallback_url, connect_args={"check_same_thread": False}, pool_pre_ping=False)
+                SessionLocal.configure(bind=engine)
                 with engine.connect() as connection:
                     connection.execute(text("SELECT 1"))
+                logger.info("Fell back to local development SQLite: %s", fallback_url)
                 return True
             except Exception as inner_exc:
-                logging.getLogger(__name__).error("SQLite fallback failed: %s", inner_exc)
+                logger.error("Local SQLite fallback failed: %s", inner_exc)
                 return False
+
         return False

@@ -112,17 +112,18 @@ export default function Scores() {
 
 
 
+  const apiOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000';
   const apiSnippets = {
-    curl: `curl -X POST "http://localhost:8000/api/scores/compute?project_id=${projectId || 1}" \\
+    curl: `curl -X POST "${apiOrigin}/api/scores/compute?project_id=${projectId || 1}" \\
   -H "Accept: application/json"`,
     python: `import requests
 
 response = requests.post(
-    "http://localhost:8000/api/scores/compute",
+    "${apiOrigin}/api/scores/compute",
     params={"project_id": ${projectId || 1}}
 )
 print("Quality Scores:", response.json())`,
-    js: `const response = await fetch("http://localhost:8000/api/scores/compute?project_id=${projectId || 1}", {
+    js: `const response = await fetch("${apiOrigin}/api/scores/compute?project_id=${projectId || 1}", {
   method: "POST",
   headers: { "Accept": "application/json" }
 });
@@ -138,7 +139,7 @@ console.log("Quality Scores:", scores);`,
   const benchmarkMetrics = [
     {
       title: 'Gold Accuracy',
-      value: goldVal != null ? `${(goldVal * 100).toFixed(1)}%` : (scores.length > 0 ? '—' : '91.4%'),
+      value: goldVal != null ? `${(goldVal * 100).toFixed(1)}%` : '—',
       threshold: '90.0%',
       passed: goldVal != null ? goldVal >= 0.9 : true,
       icon: ShieldCheck,
@@ -147,7 +148,7 @@ console.log("Quality Scores:", scores);`,
     },
     {
       title: "Cohen's Kappa",
-      value: kappaVal != null ? kappaVal.toFixed(3) : (scores.length > 0 ? '—' : '0.782'),
+      value: kappaVal != null ? kappaVal.toFixed(3) : '—',
       threshold: '0.700',
       passed: kappaVal != null ? kappaVal >= 0.7 : true,
       icon: Scale,
@@ -156,7 +157,7 @@ console.log("Quality Scores:", scores);`,
     },
     {
       title: 'Avg Trust Score',
-      value: avgTrust != null ? `${(avgTrust * 100).toFixed(1)}%` : (scores.length > 0 ? '—' : '88.5%'),
+      value: avgTrust != null ? `${(avgTrust * 100).toFixed(1)}%` : '—',
       threshold: '75.0%',
       passed: avgTrust != null ? avgTrust >= 0.75 : true,
       icon: Activity,
@@ -167,7 +168,7 @@ console.log("Quality Scores:", scores);`,
       title: 'Flagged Items',
       value: scoreSummary?.flagged_count != null
         ? `${scoreSummary.flagged_count} / ${scoreSummary.total_items}`
-        : (scores.length > 0 ? '0 / 0' : '0 / 14'),
+        : '—',
       threshold: '< 10%',
       passed: scoreSummary
         ? (scoreSummary.total_items > 0 ? scoreSummary.flagged_count / scoreSummary.total_items < 0.1 : true)
