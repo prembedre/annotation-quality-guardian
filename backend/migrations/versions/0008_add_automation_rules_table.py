@@ -36,7 +36,7 @@ def upgrade() -> None:
             sa.Column("title", sa.String(length=255), nullable=False),
             sa.Column("condition", sa.String(length=255), nullable=False),
             sa.Column("action", sa.String(length=255), nullable=False),
-            sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
             sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
             sa.UniqueConstraint("project_id", "rule_id", name="uq_project_rule"),

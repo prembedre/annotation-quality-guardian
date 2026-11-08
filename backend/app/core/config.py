@@ -66,7 +66,15 @@ class Settings(BaseSettings):
         Return database URL with resolved absolute path for SQLite or validate production PostgreSQL.
         In production, requires a persistent remote PostgreSQL URL and never silently falls back to ephemeral SQLite.
         """
-        url = (self.DATABASE_URL or "").strip()
+        url = (
+            self.DATABASE_URL
+            or os.environ.get("DATABASE_URL")
+            or os.environ.get("POSTGRES_URL")
+            or os.environ.get("POSTGRES_PRISMA_URL")
+            or ""
+        ).strip()
+        if not url:
+            url = "sqlite:///./aqg_dev.db"
 
         # Handle legacy postgres:// URLs from Supabase / Neon / Heroku
         if url.startswith("postgres://"):

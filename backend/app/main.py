@@ -87,8 +87,8 @@ app = FastAPI(
     ),
     version="0.1.0",
     lifespan=lifespan,
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 
@@ -224,6 +224,6 @@ async def root():
     return {
         "service": settings.APP_NAME,
         "environment": settings.ENV.value,
-        "docs": "/docs" if settings.DEBUG else "disabled",
+        "docs": "/docs",
         "health": "/health",
     }

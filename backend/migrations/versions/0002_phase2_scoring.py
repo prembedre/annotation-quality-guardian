@@ -67,7 +67,7 @@ def upgrade() -> None:
         if "external_id" not in item_cols:
             batch_op.add_column(sa.Column("external_id", sa.String(255), nullable=True))
         if "is_gold" not in item_cols:
-            batch_op.add_column(sa.Column("is_gold", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+            batch_op.add_column(sa.Column("is_gold", sa.Boolean(), nullable=False, server_default=sa.text("false")))
         if "gold_label" not in item_cols:
             batch_op.add_column(sa.Column("gold_label", sa.String(255), nullable=True))
 

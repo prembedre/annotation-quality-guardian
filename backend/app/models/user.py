@@ -53,7 +53,7 @@ class User(Base):
     )
 
     role = Column(
-        Enum(UserRole, name="userrole", create_type=True),
+        Enum(UserRole, name="userrole", values_callable=lambda x: [e.value for e in x], create_type=False),
         nullable=False,
         default=UserRole.ANNOTATOR,
     )

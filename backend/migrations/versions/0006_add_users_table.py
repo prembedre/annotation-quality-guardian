@@ -19,18 +19,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create the ENUM type for user roles on PostgreSQL
-    bind = op.get_bind()
-    if bind.dialect.name == "postgresql":
-        userrole_enum = sa.Enum(
-            "admin",
-            "project_manager",
-            "reviewer",
-            "annotator",
-            name="userrole",
-        )
-        userrole_enum.create(bind, checkfirst=True)
-
     op.create_table(
         "users",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -45,7 +33,6 @@ def upgrade() -> None:
                 "reviewer",
                 "annotator",
                 name="userrole",
-                create_type=False,
             ),
             nullable=False,
             server_default="annotator",
