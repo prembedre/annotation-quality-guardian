@@ -18,6 +18,7 @@ class EnvironmentType(str, Enum):
 
 
 import os
+import sys
 
 _curr_dir = os.path.dirname(os.path.abspath(__file__))
 _backend_dir = os.path.dirname(os.path.dirname(_curr_dir))
